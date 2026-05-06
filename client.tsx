@@ -5,6 +5,44 @@ import Markdown from "react-markdown";
 // Anything we receive from the bridge.
 type Event = any;
 
+// In-flight assistant message reconstruction from `stream_event` SSE deltas.
+// Mutated in-place via a ref + tick-bump for re-render — using setState here
+// would batch-thrash given 50-100 deltas per assistant turn.
+type TextBlock = { type: "text"; text: string };
+type ToolUseBlock = {
+  type: "tool_use";
+  id: string;
+  name: string;
+  input: any;
+  // Accumulated input_json_delta partial JSON, parsed at content_block_stop.
+  _partialJson: string;
+  // Set after a successful JSON.parse on stop, or cleared if parse fails.
+  _parsed: boolean;
+};
+type ThinkingBlock = { type: "thinking"; thinking: string };
+type StreamingBlock = TextBlock | ToolUseBlock | ThinkingBlock;
+type InFlightMessage = {
+  id: string;
+  role: "assistant";
+  model?: string;
+  content: StreamingBlock[];
+  done: boolean;
+  // Order-of-arrival index so the renderer can slot streaming bubbles into
+  // their natural chat-stream position.
+  arrivalIdx: number;
+};
+
+// Hook-event entry, surfaced in a collapsible "Hooks" pane (out of the main
+// chat per the plumbing-events convention — slopbox ADR-C002-2).
+type HookEntry = {
+  id: string;
+  ts: number;
+  subtype: string;
+  // hook_event_name when present (e.g. "PreToolUse", "PostToolUse").
+  hookName?: string;
+  raw: any;
+};
+
 type PermissionMode = "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk";
 
 const PERMISSION_MODE_OPTIONS: { value: PermissionMode; label: string }[] = [
@@ -95,6 +133,25 @@ function App() {
   const [commandMatches, setCommandMatches] = useState<CommandItem[]>([]);
   // Highlighted index in whichever dropdown is open.
   const [dropdownIndex, setDropdownIndex] = useState(0);
+
+  // Hook-event log (surfaced in the collapsible Hooks pane).
+  const [hookEvents, setHookEvents] = useState<HookEntry[]>([]);
+  const [hookExpanded, setHookExpanded] = useState(false);
+  // Per-entry expansion for raw JSON details.
+  const [hookOpenIds, setHookOpenIds] = useState<Record<string, boolean>>({});
+
+  // In-flight streaming reconstruction. Mutable map keyed by message id; we
+  // bump `streamTick` to force a re-render after each delta. Refs avoid the
+  // setState batch-thrash that otherwise comes from 50-100 deltas per turn.
+  const streamingRef = useRef<Map<string, InFlightMessage>>(new Map());
+  // Monotonic counter used as `arrivalIdx` for InFlightMessage so the
+  // renderer can slot streaming bubbles into their natural chat-stream
+  // position (relative to events captured at that moment).
+  const streamArrivalRef = useRef(0);
+  // Most-recently-started in-flight message id — used to pin the "active"
+  // streaming cursor.
+  const activeStreamIdRef = useRef<string | null>(null);
+  const [streamTick, setStreamTick] = useState(0);
 
   const inFlightRef = useRef<Map<string, InFlight>>(new Map());
   const initSeenRef = useRef(false);
@@ -294,16 +351,144 @@ function App() {
         );
         return;
       }
+      // --- stream_event: incremental assistant tokens ----------------------
+      // Reconstructs the same message shape that the final type:"assistant"
+      // envelope will carry, so we can render tokens as they arrive and
+      // swap to the canonical envelope on turn completion.
+      if (parsed.type === "stream_event" && parsed.event && typeof parsed.event === "object") {
+        const ev = parsed.event;
+        try {
+          if (ev.type === "message_start" && ev.message?.id) {
+            const id = ev.message.id as string;
+            streamingRef.current.set(id, {
+              id,
+              role: "assistant",
+              model: ev.message.model,
+              content: [],
+              done: false,
+              arrivalIdx: streamArrivalRef.current++,
+            });
+            activeStreamIdRef.current = id;
+          } else if (ev.type === "content_block_start" && typeof ev.index === "number") {
+            const id = activeStreamIdRef.current;
+            const msg = id ? streamingRef.current.get(id) : null;
+            if (msg) {
+              const cb = ev.content_block ?? {};
+              let block: StreamingBlock;
+              if (cb.type === "tool_use") {
+                block = {
+                  type: "tool_use",
+                  id: cb.id ?? "",
+                  name: cb.name ?? "",
+                  input: cb.input ?? {},
+                  _partialJson: "",
+                  _parsed: false,
+                };
+              } else if (cb.type === "thinking") {
+                block = { type: "thinking", thinking: cb.thinking ?? "" };
+              } else {
+                // Default to text — covers the canonical text block and any
+                // unknown/forward-compat block types defensively.
+                block = { type: "text", text: cb.text ?? "" };
+              }
+              msg.content[ev.index] = block;
+            }
+          } else if (ev.type === "content_block_delta" && typeof ev.index === "number") {
+            const id = activeStreamIdRef.current;
+            const msg = id ? streamingRef.current.get(id) : null;
+            if (msg) {
+              const block = msg.content[ev.index];
+              const delta = ev.delta ?? {};
+              if (block?.type === "text" && delta.type === "text_delta" && typeof delta.text === "string") {
+                block.text += delta.text;
+              } else if (
+                block?.type === "tool_use" &&
+                delta.type === "input_json_delta" &&
+                typeof delta.partial_json === "string"
+              ) {
+                block._partialJson += delta.partial_json;
+              } else if (
+                block?.type === "thinking" &&
+                delta.type === "thinking_delta" &&
+                typeof delta.thinking === "string"
+              ) {
+                block.thinking += delta.thinking;
+              }
+              // signature_delta and any unknown delta variants are silently
+              // tolerated — they don't affect the rendered shape.
+            }
+          } else if (ev.type === "content_block_stop" && typeof ev.index === "number") {
+            const id = activeStreamIdRef.current;
+            const msg = id ? streamingRef.current.get(id) : null;
+            const block = msg?.content[ev.index];
+            if (block?.type === "tool_use" && !block._parsed) {
+              if (block._partialJson) {
+                try {
+                  block.input = JSON.parse(block._partialJson);
+                  block._parsed = true;
+                } catch (err) {
+                  console.warn("[stream_event] tool_use partial_json parse failed", err, block._partialJson);
+                }
+              } else {
+                // No deltas arrived (rare — empty input). Mark parsed so the
+                // UI flips off the "[streaming args…]" placeholder.
+                block._parsed = true;
+              }
+            }
+          } else if (ev.type === "message_stop") {
+            const id = activeStreamIdRef.current;
+            const msg = id ? streamingRef.current.get(id) : null;
+            if (msg) msg.done = true;
+          }
+        } catch (err) {
+          console.warn("[stream_event] handler error", err, ev);
+        }
+        setStreamTick((t) => t + 1);
+        return; // do NOT push raw stream_event into the main events log
+      }
+      // --- hook events ----------------------------------------------------
+      if (
+        parsed.type === "system" &&
+        typeof parsed.subtype === "string" &&
+        (parsed.subtype === "hook_started" ||
+          parsed.subtype === "hook_progress" ||
+          parsed.subtype === "hook_response")
+      ) {
+        const entry: HookEntry = {
+          id: crypto.randomUUID(),
+          ts: Date.now(),
+          subtype: parsed.subtype,
+          hookName:
+            typeof parsed.hook_event_name === "string"
+              ? parsed.hook_event_name
+              : typeof parsed.hookEventName === "string"
+              ? parsed.hookEventName
+              : undefined,
+          raw: parsed,
+        };
+        setHookEvents((prev) => [...prev, entry]);
+        return; // out of the main chat by default
+      }
+      // When the canonical assistant envelope arrives, swap out our in-flight
+      // reconstruction (the envelope is authoritative).
+      if (parsed.type === "assistant" && parsed.message?.id) {
+        const id = parsed.message.id as string;
+        if (streamingRef.current.has(id)) {
+          streamingRef.current.delete(id);
+          if (activeStreamIdRef.current === id) activeStreamIdRef.current = null;
+          setStreamTick((t) => t + 1);
+        }
+      }
       setEvents((prev) => [...prev, parsed]);
     };
     return () => ws.close();
   }, []);
 
-  // Auto-scroll on new events.
+  // Auto-scroll on new events or streaming deltas.
   useEffect(() => {
     const el = mainRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [events.length]);
+  }, [events.length, streamTick]);
 
   // Global Cmd+Shift+1 (== Cmd+! on US layouts) toggles side-channel shell
   // mode. We use `e.code === 'Digit1'` rather than `e.key === '!'` because
@@ -723,6 +908,16 @@ function App() {
   // Pre-compute init system event for the header chip.
   const init = events.find((e) => e.type === "system" && e.subtype === "init");
 
+  // Snapshot in-flight streaming messages (sorted by arrival order) for render.
+  // The streamTick dependency is the force-render signal — each delta bumps
+  // it. Reading the ref here is intentional; the cost is small (≤1 active
+  // message in normal flow) and avoids a parallel state copy.
+  void streamTick;
+  const streamingList: InFlightMessage[] = Array.from(streamingRef.current.values()).sort(
+    (a, b) => a.arrivalIdx - b.arrivalIdx,
+  );
+  const activeStreamId = activeStreamIdRef.current;
+
   return (
     <>
       <header>
@@ -749,7 +944,50 @@ function App() {
         {events.map((ev, i) => (
           <EventRow key={i} ev={ev} pendingPerms={pendingPerms} respondPerm={respondPerm} allEvents={events} />
         ))}
+        {streamingList.map((msg) => (
+          <StreamingRow key={msg.id} msg={msg} isActive={msg.id === activeStreamId} />
+        ))}
       </main>
+      {hookEvents.length > 0 && (
+        <div className="hooks-panel">
+          <div className="hooks-head">
+            <label>
+              <input
+                type="checkbox"
+                checked={hookExpanded}
+                onChange={(e) => setHookExpanded(e.target.checked)}
+              />
+              Hooks ({hookEvents.length})
+            </label>
+          </div>
+          {hookExpanded && (
+            <div className="hooks-body">
+              {hookEvents.map((h) => {
+                const open = !!hookOpenIds[h.id];
+                const tsStr = new Date(h.ts).toISOString().slice(11, 23);
+                return (
+                  <div className="hook-entry" key={h.id}>
+                    <div
+                      className="hook-line"
+                      onClick={() =>
+                        setHookOpenIds((prev) => ({ ...prev, [h.id]: !open }))
+                      }
+                    >
+                      <span className="hook-ts">[{tsStr}]</span>
+                      <span className="hook-sub">{h.subtype}</span>
+                      {h.hookName && <span className="hook-name">{h.hookName}</span>}
+                      <span className="hook-toggle">{open ? "▾" : "▸"}</span>
+                    </div>
+                    {open && (
+                      <pre className="hook-raw">{JSON.stringify(h.raw, null, 2)}</pre>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
       {shellOutputs.length > 0 && (
         <div className="shell-panel">
           {shellOutputs.map((s) => (
@@ -960,6 +1198,68 @@ function ContentBlock({ block, allEvents }: { block: any; allEvents: Event[] }) 
     return <div className="debug">[thinking] {block.thinking?.slice(0, 100)}…</div>;
   }
   return <div className="debug">block: {block.type}</div>;
+}
+
+function StreamingRow({ msg, isActive }: { msg: InFlightMessage; isActive: boolean }) {
+  // Index of the LAST text block — the cursor sits at its tail while we're
+  // the active streaming message and the turn isn't done yet.
+  let lastTextIdx = -1;
+  for (let i = msg.content.length - 1; i >= 0; i--) {
+    if (msg.content[i]?.type === "text") {
+      lastTextIdx = i;
+      break;
+    }
+  }
+  const showCursor = isActive && !msg.done;
+  return (
+    <div className="row assistant">
+      <div className="bubble" style={{ width: "80%" }}>
+        {msg.content.map((block, i) => {
+          if (!block) return null;
+          if (block.type === "text") {
+            const trailing = showCursor && i === lastTextIdx;
+            return (
+              <div className="md" key={i}>
+                <Markdown>{block.text || ""}</Markdown>
+                {trailing && <span className="stream-cursor" />}
+              </div>
+            );
+          }
+          if (block.type === "tool_use") {
+            return (
+              <details className="tool" open key={i}>
+                <summary>
+                  tool_use · <strong>{block.name || "(naming…)"}</strong>
+                  <span className="status">
+                    {block._parsed ? "args ready" : "[streaming args…]"}
+                  </span>
+                </summary>
+                <div style={{ marginTop: 6 }}>
+                  <div style={{ fontSize: 11, color: "#888" }}>input</div>
+                  <pre>
+                    {block._parsed
+                      ? JSON.stringify(block.input, null, 2)
+                      : block._partialJson || "(no deltas yet)"}
+                  </pre>
+                </div>
+              </details>
+            );
+          }
+          if (block.type === "thinking") {
+            return (
+              <div className="debug" key={i}>
+                [thinking] {(block.thinking || "").slice(0, 200)}
+                {showCursor && i === msg.content.length - 1 ? "▍" : "…"}
+              </div>
+            );
+          }
+          return null;
+        })}
+        {/* Empty-content edge case: show cursor anyway so the bubble isn't blank. */}
+        {showCursor && msg.content.length === 0 && <span className="stream-cursor" />}
+      </div>
+    </div>
+  );
 }
 
 const root = createRoot(document.getElementById("root")!);

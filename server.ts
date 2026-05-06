@@ -45,7 +45,18 @@ Bun.serve<WSData, undefined>({
     open(ws: ServerWebSocket<WSData>) {
       console.log("[ws] open — spawning claude");
       const child = Bun.spawn(
-        ["claude", "--continue", "--print", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"],
+        [
+          "claude",
+          "--continue",
+          "--print",
+          "--input-format",
+          "stream-json",
+          "--output-format",
+          "stream-json",
+          "--verbose",
+          "--include-partial-messages",
+          "--include-hook-events",
+        ],
         { stdin: "pipe", stdout: "pipe", stderr: "inherit" },
       );
       ws.data = { child, buf: "" };

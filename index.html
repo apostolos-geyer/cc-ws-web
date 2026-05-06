@@ -64,6 +64,20 @@
   .md p { margin: 0.3em 0; }
   .md code { background: #0a0c10; padding: 1px 4px; border-radius: 3px; }
   .md pre { background: #0a0c10; padding: 8px; border-radius: 4px; overflow-x: auto; }
+  .stream-cursor { display: inline-block; width: 7px; height: 1em; margin-left: 1px; vertical-align: text-bottom; background: #b0c5ff; animation: cc-blink 1s steps(1, end) infinite; }
+  @keyframes cc-blink { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
+  .hooks-panel { background: #0a0c10; border-top: 1px solid #262a33; max-height: 200px; overflow-y: auto; font-family: ui-monospace, monospace; font-size: 12px; }
+  .hooks-head { padding: 6px 12px; border-bottom: 1px solid #1f242e; color: #9aa0a8; }
+  .hooks-head label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+  .hooks-body { padding: 4px 12px 8px; }
+  .hook-entry { margin: 3px 0; }
+  .hook-line { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 2px 0; }
+  .hook-line:hover { color: #fff; }
+  .hook-ts { color: #5a606b; }
+  .hook-sub { color: #b0c5ff; font-weight: 600; }
+  .hook-name { color: #cfd6e3; }
+  .hook-toggle { color: #777f8c; margin-left: auto; }
+  .hook-raw { background: #14171f; border: 1px solid #1f242e; border-radius: 4px; padding: 6px 8px; margin: 2px 0 6px 14px; font-size: 11px; color: #cfd6e3; white-space: pre-wrap; word-break: break-word; max-height: 240px; overflow-y: auto; }
 </style>
 </head>
 <body>
