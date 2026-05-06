@@ -76,10 +76,14 @@ function nextCycleMode(current: PermissionMode): PermissionMode {
 // Single source of truth for selectable model names. set_model takes the
 // model id verbatim; the binary resolves aliases. Order = display order.
 const MODEL_DEFS = [
-  { value: "claude-opus-4-7",   label: "Opus 4.7" },
-  { value: "claude-opus-4-6",   label: "Opus 4.6" },
-  { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
-  { value: "claude-haiku-4-5",  label: "Haiku 4.5" },
+  { value: "claude-opus-4-7",                  label: "Opus 4.7" },
+  { value: "claude-opus-4-7[1m]",              label: "Opus 4.7 (1M)" },
+  { value: "claude-opus-4-6",                  label: "Opus 4.6" },
+  { value: "claude-opus-4-6[1m]",              label: "Opus 4.6 (1M)" },
+  { value: "claude-sonnet-4-6",                label: "Sonnet 4.6" },
+  { value: "claude-sonnet-4-5",                label: "Sonnet 4.5" },
+  { value: "claude-sonnet-4-5[1m]",            label: "Sonnet 4.5 (1M)" },
+  { value: "claude-haiku-4-5",                 label: "Haiku 4.5" },
 ] as const;
 type Model = (typeof MODEL_DEFS)[number]["value"];
 const MODEL_OPTIONS: { value: Model; label: string }[] =
@@ -93,8 +97,8 @@ const EFFORT_DEFS = [
   { value: "low",    label: "Low" },
   { value: "medium", label: "Medium" },
   { value: "high",   label: "High" },
-  { value: "max",    label: "Max" },
   { value: "xhigh",  label: "xHigh" },
+  { value: "max",    label: "Max" },
 ] as const;
 type Effort = (typeof EFFORT_DEFS)[number]["value"];
 const EFFORT_OPTIONS: { value: Effort; label: string }[] =
@@ -130,6 +134,10 @@ type InFlight =
       kind: "respawn-effort";
       effort: Effort;
       prevEffort: Effort | "";
+      timeoutId: ReturnType<typeof setTimeout>;
+    }
+  | {
+      kind: "get_settings";
       timeoutId: ReturnType<typeof setTimeout>;
     };
 
@@ -399,6 +407,44 @@ function App() {
               if (modelErrorClearRef.current) clearTimeout(modelErrorClearRef.current);
               modelErrorClearRef.current = setTimeout(() => setModelError(null), 5000);
             }
+          } else if (flight.kind === "get_settings") {
+            // Best-effort effort population. Schema (verified against the
+            // v2.1.132 binary's print.ts handler) puts the resolved effort at
+            // response.response.applied.effort and the configured value at
+            // response.response.effective.effortLevel. We probe the obvious
+            // top-level / applied / effective / settings / permissions /
+            // inferenceConfig nests to be defensive across binary versions
+            // that may shuffle the shape. Silent fallback on miss — no toast.
+            if (parsed.response.subtype === "success") {
+              const inner = parsed.response.response ?? parsed.response;
+              // TRACE: dump full payload so the operator can inspect the
+              // shape claude returned in their version of the binary.
+              console.log("[get_settings] response payload", inner);
+              const probes: any[] = [
+                inner,
+                inner?.applied,
+                inner?.effective,
+                inner?.settings,
+                inner?.permissions,
+                inner?.inferenceConfig,
+              ];
+              let found: string | undefined;
+              for (const p of probes) {
+                if (!p || typeof p !== "object") continue;
+                const candidate =
+                  (typeof p.effortLevel === "string" && p.effortLevel) ||
+                  (typeof p.effort_level === "string" && p.effort_level) ||
+                  (typeof p.effort === "string" && p.effort) ||
+                  undefined;
+                if (candidate) {
+                  found = candidate;
+                  break;
+                }
+              }
+              if (found && (KNOWN_EFFORTS as readonly string[]).includes(found)) {
+                setActiveEffort(found as Effort);
+              }
+            }
           }
         }
       }
@@ -414,16 +460,38 @@ function App() {
         if (typeof m === "string" && (KNOWN_PERMISSION_MODES as readonly string[]).includes(m)) {
           setActiveMode(m as PermissionMode);
         }
-        // Seed activeModel from init.model if it matches a known value.
-        // Otherwise leave it blank so the placeholder option shows.
+        // Seed activeModel from init.model. If it matches a known value,
+        // great. If not (e.g. a runtime-suffixed `claude-opus-4-7[1m]` or a
+        // dated variant we haven't enumerated), still seed it — the
+        // renderedModelOptions builder below will surface it as a one-off
+        // "(current)" entry so the dropdown isn't blank for this session.
         const im = typeof parsed.model === "string" ? parsed.model : "";
-        if (im && (KNOWN_MODELS as readonly string[]).includes(im)) {
-          setActiveModel(im as Model);
-        }
+        if (im) setActiveModel(im as Model);
         if (Array.isArray(parsed.agents)) setAgents(parsed.agents);
         if (Array.isArray(parsed.slash_commands)) setSlashCommands(parsed.slash_commands);
         if (Array.isArray(parsed.skills)) setSkills(parsed.skills);
         console.log("[init] agents", parsed.agents, "slash", parsed.slash_commands, "skills", parsed.skills);
+        // Fire a get_settings control_request so we can populate the effort
+        // selector — system:init's payload doesn't carry effort. Best-effort
+        // (silent fallback on error / missing field).
+        const settingsRequestId = crypto.randomUUID();
+        const settingsTimeoutId = setTimeout(() => {
+          inFlightRef.current.delete(settingsRequestId);
+        }, 10_000);
+        inFlightRef.current.set(settingsRequestId, {
+          kind: "get_settings",
+          timeoutId: settingsTimeoutId,
+        });
+        const settingsFrame = {
+          type: "control_request",
+          request_id: settingsRequestId,
+          request: { subtype: "get_settings" },
+        };
+        const ws = wsRef.current;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          console.log("[send]", settingsFrame);
+          ws.send(JSON.stringify(settingsFrame));
+        }
       }
       // Bash command echo & output. Empirically the CLI does NOT emit
       // local_command_output for `bash_command`; instead it round-trips two
@@ -1128,6 +1196,24 @@ function App() {
   );
   const activeStreamId = activeStreamIdRef.current;
 
+  // Build the rendered model options. If init reported a model we don't
+  // enumerate in MODEL_DEFS (e.g. a dated variant `claude-opus-4-1-20250805`
+  // or a runtime [1m] alias not in our list), surface it as a one-off
+  // "(current)" entry so the dropdown isn't empty. Type note: the value list
+  // here can include strings outside the `Model` union — the `<select>`
+  // accepts any string and `set_model` ships the value verbatim, so the
+  // widening is safe at the wire boundary.
+  const renderedModelOptions: { value: string; label: string }[] = (() => {
+    const base = MODEL_OPTIONS.map((o) => ({ value: o.value as string, label: o.label }));
+    if (
+      activeModel &&
+      !(KNOWN_MODELS as readonly string[]).includes(activeModel)
+    ) {
+      base.unshift({ value: activeModel, label: `${activeModel} (current)` });
+    }
+    return base;
+  })();
+
   return (
     <>
       <header>
@@ -1224,7 +1310,7 @@ function App() {
             title="Model (set_model control_request, in-process)"
           >
             <option value="">(model)</option>
-            {MODEL_OPTIONS.map((opt) => (
+            {renderedModelOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
