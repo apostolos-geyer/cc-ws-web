@@ -169,6 +169,18 @@ function EventRow({
     return <div className="debug">— turn complete ({ev.subtype ?? ""}) —</div>;
   }
 
+  // CLI emits a "user" event with tool_result blocks echoing what it fed back into
+  // the conversation. We already inline these into the matching tool_use card, so
+  // suppress the standalone row.
+  if (ev.type === "user" && Array.isArray(ev.message?.content)) {
+    const onlyToolResults = ev.message.content.every((c: any) => c?.type === "tool_result");
+    if (onlyToolResults) return null;
+  }
+
+  if (ev.type === "rate_limit_event") {
+    return null; // noise
+  }
+
   if (ev.type === "control_request" && ev.subtype === "can_use_tool" && pendingPerms[ev.request_id]) {
     return (
       <div className="perm">
