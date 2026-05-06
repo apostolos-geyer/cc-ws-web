@@ -5,11 +5,37 @@ import Markdown from "react-markdown";
 // Anything we receive from the bridge.
 type Event = any;
 
+type PermissionMode = "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk";
+
+const PERMISSION_MODE_OPTIONS: { value: PermissionMode; label: string }[] = [
+  { value: "default", label: "Default (ask)" },
+  { value: "acceptEdits", label: "Auto-accept edits" },
+  { value: "bypassPermissions", label: "Bypass all (dangerous)" },
+  { value: "plan", label: "Plan mode (no tool execution)" },
+  { value: "dontAsk", label: "Don't ask" },
+];
+
+// In-flight control_request tracker. Currently only set_permission_mode is
+// correlated through here; can_use_tool replies stay in pendingPerms because
+// the human is the slow async actor.
+type InFlight = {
+  kind: "set_permission_mode";
+  mode: PermissionMode;
+  prevMode: PermissionMode;
+  timeoutId: ReturnType<typeof setTimeout>;
+};
+
 function App() {
   const [events, setEvents] = useState<Event[]>([]);
   const [input, setInput] = useState("");
   const [connected, setConnected] = useState(false);
   const [pendingPerms, setPendingPerms] = useState<Record<string, Event>>({});
+  const [activeMode, setActiveMode] = useState<PermissionMode>("default");
+  const [pendingMode, setPendingMode] = useState<PermissionMode | null>(null);
+  const [modeError, setModeError] = useState<string | null>(null);
+  const inFlightRef = useRef<Map<string, InFlight>>(new Map());
+  const initSeenRef = useRef(false);
+  const errorClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const mainRef = useRef<HTMLElement | null>(null);
 
@@ -32,13 +58,54 @@ function App() {
         setPendingPerms((p) => ({ ...p, [parsed.request_id]: parsed }));
       }
       if (parsed.type === "control_response" && parsed.response?.request_id) {
-        // Tear down any pending widget if the response is matching.
+        const id = parsed.response.request_id;
+        // Tear down any pending can_use_tool widget if the response is matching.
         setPendingPerms((p) => {
-          const id = parsed.response.request_id;
           if (!(id in p)) return p;
           const { [id]: _gone, ...rest } = p;
           return rest;
         });
+        // Match against our control-request in-flight Map.
+        const flight = inFlightRef.current.get(id);
+        if (flight) {
+          inFlightRef.current.delete(id);
+          clearTimeout(flight.timeoutId);
+          if (flight.kind === "set_permission_mode") {
+            if (parsed.response.subtype === "success") {
+              setActiveMode(flight.mode);
+              setPendingMode(null);
+              setModeError(null);
+            } else {
+              const errMsg = parsed.response.error ?? "unknown error";
+              setPendingMode(null);
+              setModeError(`could not change to ${flight.mode}: ${errMsg}`);
+              if (errorClearRef.current) clearTimeout(errorClearRef.current);
+              errorClearRef.current = setTimeout(() => setModeError(null), 5000);
+            }
+          }
+        }
+      }
+      // Capture initial permission mode from system:init (first one only).
+      if (
+        !initSeenRef.current &&
+        parsed.type === "system" &&
+        parsed.subtype === "init"
+      ) {
+        initSeenRef.current = true;
+        // The CLI emits permissionMode (camelCase). Empirically it can hold
+        // values like "auto" that aren't in our five-value wire union; only
+        // adopt it if it's a known mode, otherwise fall back to "default".
+        const m = parsed.permissionMode ?? parsed.permission_mode;
+        const known: PermissionMode[] = [
+          "default",
+          "acceptEdits",
+          "bypassPermissions",
+          "plan",
+          "dontAsk",
+        ];
+        if (typeof m === "string" && (known as string[]).includes(m)) {
+          setActiveMode(m as PermissionMode);
+        }
       }
       setEvents((prev) => [...prev, parsed]);
     };
@@ -72,6 +139,38 @@ function App() {
     send({ type: "control_request", request_id: crypto.randomUUID(), request: { subtype: "interrupt" } });
   }
 
+  function changeMode(next: PermissionMode) {
+    if (next === activeMode || pendingMode != null) return;
+    const requestId = crypto.randomUUID();
+    const prevMode = activeMode;
+    setPendingMode(next);
+    setModeError(null);
+    if (errorClearRef.current) {
+      clearTimeout(errorClearRef.current);
+      errorClearRef.current = null;
+    }
+    const timeoutId = setTimeout(() => {
+      // Only act if this request is still in flight.
+      if (!inFlightRef.current.has(requestId)) return;
+      inFlightRef.current.delete(requestId);
+      setPendingMode(null);
+      setModeError(`could not change to ${next}: timed out after 10s`);
+      if (errorClearRef.current) clearTimeout(errorClearRef.current);
+      errorClearRef.current = setTimeout(() => setModeError(null), 5000);
+    }, 10_000);
+    inFlightRef.current.set(requestId, {
+      kind: "set_permission_mode",
+      mode: next,
+      prevMode,
+      timeoutId,
+    });
+    send({
+      type: "control_request",
+      request_id: requestId,
+      request: { subtype: "set_permission_mode", mode: next },
+    });
+  }
+
   function respondPerm(req: Event, behavior: "allow" | "deny") {
     // The CLI's can_use_tool request looks like:
     //   {type:"control_request", request_id, request:{subtype:"can_use_tool", tool_name, input, tool_use_id, ...}}
@@ -103,6 +202,20 @@ function App() {
       <header>
         <div className="chip">
           {connected ? (init ? `model: ${init.model ?? "?"} · cwd: ${init.cwd ?? "?"}` : "connected, waiting for init…") : "disconnected"}
+        </div>
+        <div className="mode-control">
+          <select
+            className="mode-select"
+            value={pendingMode ?? activeMode}
+            onChange={(e) => changeMode(e.target.value as PermissionMode)}
+            disabled={!connected || pendingMode != null}
+            title="Permission mode"
+          >
+            {PERMISSION_MODE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          {modeError && <span className="mode-error">{modeError}</span>}
         </div>
         <button onClick={interrupt} disabled={!connected}>Interrupt</button>
       </header>
