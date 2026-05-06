@@ -76,8 +76,66 @@ Bun.serve<WSData, undefined>({
       })();
     },
 
-    message(ws: ServerWebSocket<WSData>, msg) {
+    async message(ws: ServerWebSocket<WSData>, msg) {
       const text = typeof msg === "string" ? msg : new TextDecoder().decode(msg);
+
+      // Intercept `_local` frames before forwarding to claude. Frames the
+      // browser sends with a `_local` field never reach the model — they're
+      // a parallel local channel for things like context-shell.
+      let parsed: any;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        // malformed; fall through to opaque forwarding
+      }
+      if (parsed?._local === "shell") {
+        const command = typeof parsed.command === "string" ? parsed.command : "";
+        const requestId = typeof parsed.requestId === "string" ? parsed.requestId : "";
+        try {
+          const proc = Bun.spawn(["/bin/sh", "-c", command], {
+            stdout: "pipe",
+            stderr: "pipe",
+            stdin: "ignore",
+          });
+          const [stdout, stderr] = await Promise.all([
+            new Response(proc.stdout).text(),
+            new Response(proc.stderr).text(),
+          ]);
+          const exitCode = await proc.exited;
+          try {
+            ws.send(
+              JSON.stringify({
+                _local: "shellResult",
+                requestId,
+                command,
+                stdout,
+                stderr,
+                exitCode,
+              }),
+            );
+          } catch {
+            // ws closed
+          }
+        } catch (err) {
+          console.error("[ws] _local shell error", err);
+          try {
+            ws.send(
+              JSON.stringify({
+                _local: "shellResult",
+                requestId,
+                command,
+                stdout: "",
+                stderr: String(err),
+                exitCode: -1,
+              }),
+            );
+          } catch {
+            // ws closed
+          }
+        }
+        return;
+      }
+
       if (!ws.data?.child?.stdin) return;
       try {
         ws.data.child.stdin.write(text + "\n");

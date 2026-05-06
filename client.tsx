@@ -39,13 +39,28 @@ type InFlight =
 type ShellOutput = {
   id: string;
   command: string;
-  // Each local_command_output system event carries `content` text. The CLI
-  // may stream multiple chunks per command, so we accumulate by id (we mint
-  // the id client-side and reuse the same one for the request frame's
-  // `uuid` so we can later correlate if the binary echoes it back; for now
-  // we just stash all subsequent local_command_output events under the
-  // most-recent shell command — empirically the binary doesn't tag them).
+  // Source mode: 'context' = local Bun.spawn via {_local:"shell"} (claude
+  // sees it on the next turn); 'sideChannel' = bash_command wire frame
+  // (claude does NOT see the output).
+  source: "context" | "sideChannel";
+  // Accumulated output text. For context-mode we set it once when the
+  // shellResult frame arrives; for side-channel mode the CLI may stream
+  // multiple chunks per command, so we accumulate by id (we mint the id
+  // client-side and reuse the same one for the request frame's `uuid` so we
+  // can later correlate if the binary echoes it back; for now we just stash
+  // all subsequent bash-output events under the most-recent shell command —
+  // empirically the binary doesn't tag them).
   chunks: string[];
+};
+
+// Three-state shell mode. 'off' is the default text-prompt mode.
+type ShellMode = "off" | "context" | "sideChannel";
+
+// In-flight context-shell command awaiting server reply, keyed by requestId.
+type PendingContextShell = {
+  command: string;
+  followUp: string;
+  outputId: string;
 };
 
 // @-mention dropdown item.
@@ -68,7 +83,7 @@ function App() {
   const [modeError, setModeError] = useState<string | null>(null);
 
   // !/@// affordance state.
-  const [shellMode, setShellMode] = useState(false);
+  const [shellMode, setShellMode] = useState<ShellMode>("off");
   const [shellOutputs, setShellOutputs] = useState<ShellOutput[]>([]);
   const [agents, setAgents] = useState<string[]>([]);
   const [slashCommands, setSlashCommands] = useState<string[]>([]);
@@ -91,9 +106,13 @@ function App() {
   // Keep the last requested file_suggestions query so the dropdown only shows
   // matches from the freshest in-flight request.
   const latestFileQueryRef = useRef<string>("");
-  // Stable id of the most recent shell command, used to bucket
-  // local_command_output events.
+  // Stable id of the most recent side-channel shell command, used to bucket
+  // bash-stdout/stderr replay events from the CLI.
   const activeShellIdRef = useRef<string | null>(null);
+  // requestId → pending context-shell metadata (command, optional follow-up
+  // prompt, the ShellOutput id we're filling in). Cleared when the
+  // matching `_local:"shellResult"` frame arrives.
+  const pendingContextShellRef = useRef<Map<string, PendingContextShell>>(new Map());
 
   useEffect(() => {
     const ws = new WebSocket(`ws://${location.host}/ws`);
@@ -110,6 +129,51 @@ function App() {
         return;
       }
       console.log("[recv]", parsed);
+      // Server-side context-shell result. Match by requestId, fill in the
+      // ShellOutput entry, then construct + send an SDKUserMessage so the
+      // model sees the command + output on its next turn. Optional follow-up
+      // text typed after the command on subsequent input lines is appended.
+      if (parsed?._local === "shellResult" && typeof parsed.requestId === "string") {
+        const pending = pendingContextShellRef.current.get(parsed.requestId);
+        if (pending) {
+          pendingContextShellRef.current.delete(parsed.requestId);
+          const stdout = typeof parsed.stdout === "string" ? parsed.stdout : "";
+          const stderr = typeof parsed.stderr === "string" ? parsed.stderr : "";
+          const exitCode = typeof parsed.exitCode === "number" ? parsed.exitCode : -1;
+          // Render in the shell panel for the operator's reference.
+          const parts: string[] = [];
+          if (stdout) parts.push(stdout);
+          if (stderr) parts.push("[stderr]\n" + stderr);
+          parts.push(`[exit ${exitCode}]`);
+          const renderedOutput = parts.join("\n");
+          setShellOutputs((prev) =>
+            prev.map((s) =>
+              s.id === pending.outputId ? { ...s, chunks: [renderedOutput] } : s
+            )
+          );
+          // Build the SDKUserMessage payload for claude.
+          const summary =
+            "```sh\n" +
+            `$ ${pending.command}\n` +
+            stdout +
+            (stderr ? "\n[stderr]\n" + stderr : "") +
+            `\n[exit ${exitCode}]\n` +
+            "```" +
+            (pending.followUp ? "\n\n" + pending.followUp : "");
+          // Mirror the user's bubble in the local event log so they can see
+          // what was sent — match the standard sendPrompt() pattern.
+          setEvents((prev) => [...prev, { type: "_local_user", text: summary }]);
+          const ws = wsRef.current;
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            const frame = { type: "user", message: { role: "user", content: summary } };
+            console.log("[send]", frame);
+            // NDJSON framing — match the existing user-message Send code's
+            // "one frame per line" expectation downstream.
+            ws.send(JSON.stringify(frame) + "\n");
+          }
+        }
+        return;
+      }
       if (parsed.type === "control_request" && parsed.request?.subtype === "can_use_tool") {
         setPendingPerms((p) => ({ ...p, [parsed.request_id]: parsed }));
       }
@@ -241,6 +305,22 @@ function App() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [events.length]);
 
+  // Global Cmd+Shift+1 (== Cmd+! on US layouts) toggles side-channel shell
+  // mode. We use `e.code === 'Digit1'` rather than `e.key === '!'` because
+  // on macOS Chrome the keypress with Cmd+Shift held emits `key === '1'`
+  // (Cmd suppresses Shift's symbol layer for printable keys), and Digit1 is
+  // the layout-stable codepoint regardless. Cmd+Shift+1 toggles to
+  // sideChannel; pressing again with sideChannel active drops to off.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.metaKey || !e.shiftKey || e.code !== "Digit1") return;
+      e.preventDefault();
+      setShellMode((m) => (m === "sideChannel" ? "off" : "sideChannel"));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   function send(frame: any) {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
@@ -250,28 +330,64 @@ function App() {
   }
 
   function sendBashCommand(command: string) {
-    // Top-level wire type, NOT wrapped in control_request. Output comes back
-    // out-of-band (likely as system:local_command_output) and should not be
-    // appended to the assistant transcript per the schema's input-only note.
+    // Side-channel: top-level wire type, NOT wrapped in control_request.
+    // Output comes back out-of-band as user/isReplay <bash-stdout> events
+    // (or system:local_command_output) and is NOT visible to claude per the
+    // schema's input-only @internal note.
     const id = crypto.randomUUID();
     activeShellIdRef.current = id;
-    setShellOutputs((prev) => [...prev, { id, command, chunks: [] }]);
+    setShellOutputs((prev) => [
+      ...prev,
+      { id, command, source: "sideChannel", chunks: [] },
+    ]);
     send({ type: "bash_command", command });
+  }
+
+  function sendContextShell(command: string, followUp: string) {
+    // Context-shell: server runs the command via Bun.spawn and returns
+    // stdout/stderr/exit; we then synthesize an SDKUserMessage so claude
+    // sees the command + output on its next turn (TUI !cmd muscle memory).
+    const requestId = crypto.randomUUID();
+    const outputId = crypto.randomUUID();
+    pendingContextShellRef.current.set(requestId, { command, followUp, outputId });
+    setShellOutputs((prev) => [
+      ...prev,
+      { id: outputId, command, source: "context", chunks: [] },
+    ]);
+    send({ _local: "shell", command, requestId });
   }
 
   function sendPrompt() {
     const text = input.trim();
     if (!text) return;
 
-    // Shell mode: consume `!` prefix if present (the user-visible toggle and
-    // the leading `!` are equivalent affordances, the latter for muscle
-    // memory) and dispatch as bash_command. Closes shell mode after send so
-    // the operator doesn't accidentally repeat-fire shell commands.
-    if (shellMode) {
+    // Context-shell mode: command on first line (leading `!` consumed if
+    // present); any subsequent lines become an optional follow-up prompt
+    // appended after the fenced output block in the SDKUserMessage we
+    // synthesize on shellResult. Closes shell mode after send so the
+    // operator doesn't accidentally repeat-fire shell commands.
+    if (shellMode === "context") {
+      // Use the raw input here (not `text`, which was trimmed) so we don't
+      // collapse a deliberately blank first line. We still expect the
+      // command on line 1 in practice.
+      const lines = input.split("\n");
+      const firstRaw = lines[0] ?? "";
+      const first = firstRaw.startsWith("!") ? firstRaw.slice(1).trimStart() : firstRaw.trim();
+      const followUp = lines.slice(1).join("\n").trim();
+      if (first) sendContextShell(first, followUp);
+      setInput("");
+      setShellMode("off");
+      closeAllDropdowns();
+      return;
+    }
+
+    // Side-channel shell mode: legacy bash_command path, claude does NOT
+    // see the output. Same `!`-prefix consumption rule for muscle memory.
+    if (shellMode === "sideChannel") {
       const cmd = text.startsWith("!") ? text.slice(1).trimStart() : text;
       if (cmd) sendBashCommand(cmd);
       setInput("");
-      setShellMode(false);
+      setShellMode("off");
       closeAllDropdowns();
       return;
     }
@@ -530,19 +646,19 @@ function App() {
         closeAllDropdowns();
         return;
       }
-      if (shellMode) {
+      if (shellMode !== "off") {
         e.preventDefault();
-        setShellMode(false);
+        setShellMode("off");
         return;
       }
     }
 
-    // Shell-mode entry: lone `!` typed at start of empty input toggles shell.
-    // We watch via onChange as well, but handling it in keydown lets us also
-    // exit on backspace-at-start.
-    if (e.key === "Backspace" && shellMode && input.length === 0) {
+    // Backspace-at-start while a shell mode is active drops us back to
+    // text-prompt mode without sending. Watching keydown lets us catch the
+    // empty-input case before onChange fires.
+    if (e.key === "Backspace" && shellMode !== "off" && input.length === 0) {
       e.preventDefault();
-      setShellMode(false);
+      setShellMode("off");
       return;
     }
 
@@ -580,14 +696,13 @@ function App() {
 
   function handleTextareaChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const next = e.target.value;
-    // Auto-enable shell mode if the input STARTS with `!` and there's no
-    // leading whitespace. We don't strip the `!` from the input — we just
-    // flip the indicator, and sendPrompt() peels the prefix on send.
-    if (!shellMode && next.startsWith("!")) {
-      setShellMode(true);
-      // Strip the bang from the visible input — the shell-mode chip already
-      // tells the user this is a shell command, so the leading `!` would be
-      // duplicate signal.
+    // Auto-enter context-shell mode when input STARTS with `!` and we're
+    // currently off. We strip the bang from the visible input — the chip
+    // tells the user this is a shell command, so the leading `!` would be
+    // duplicate signal. (Side-channel mode is entered only via Cmd+Shift+1
+    // — see the global keydown listener.)
+    if (shellMode === "off" && next.startsWith("!")) {
+      setShellMode("context");
       setInput(next.slice(1));
       e.target.value = next.slice(1);
       // No autocomplete in shell mode.
@@ -642,6 +757,9 @@ function App() {
               <div className="shell-head">
                 <span className="shell-prompt">$</span>
                 <span className="shell-cmd">{s.command}</span>
+                <span className={"shell-source " + s.source}>
+                  {s.source === "context" ? "context" : "side-channel"}
+                </span>
                 <button className="shell-dismiss" onClick={() => dismissShellOutput(s.id)} title="Dismiss">×</button>
               </div>
               {s.chunks.length > 0 && (
@@ -653,7 +771,12 @@ function App() {
       )}
       <footer>
         <div className="input-wrap">
-          {shellMode && <span className="shell-chip">Shell</span>}
+          {shellMode === "context" && (
+            <span className="shell-chip context">Shell + context</span>
+          )}
+          {shellMode === "sideChannel" && (
+            <span className="shell-chip side">Shell (side-channel)</span>
+          )}
           <textarea
             ref={textareaRef}
             rows={2}
@@ -667,11 +790,13 @@ function App() {
               setTimeout(() => closeAllDropdowns(), 100);
             }}
             placeholder={
-              shellMode
-                ? "run a shell command…"
+              shellMode === "context"
+                ? "shell command on line 1; optional follow-up prompt on subsequent lines (claude sees the output)"
+                : shellMode === "sideChannel"
+                ? "run a shell command — output stays local, claude does NOT see it"
                 : "Type a prompt — Cmd/Ctrl+Enter to send · ! for shell · @ to mention · / for commands"
             }
-            className={shellMode ? "shell-on" : undefined}
+            className={shellMode !== "off" ? "shell-on" : undefined}
           />
           {dropdownOpen === "mention" && (
             <ul className="ac-dropdown" role="listbox">
