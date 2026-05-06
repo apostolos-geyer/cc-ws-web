@@ -28,14 +28,15 @@ function App() {
         return;
       }
       console.log("[recv]", parsed);
-      if (parsed.type === "control_request" && parsed.subtype === "can_use_tool") {
+      if (parsed.type === "control_request" && parsed.request?.subtype === "can_use_tool") {
         setPendingPerms((p) => ({ ...p, [parsed.request_id]: parsed }));
       }
-      if (parsed.type === "control_response" && parsed.request_id) {
+      if (parsed.type === "control_response" && parsed.response?.request_id) {
         // Tear down any pending widget if the response is matching.
         setPendingPerms((p) => {
-          if (!(parsed.request_id in p)) return p;
-          const { [parsed.request_id]: _gone, ...rest } = p;
+          const id = parsed.response.request_id;
+          if (!(id in p)) return p;
+          const { [id]: _gone, ...rest } = p;
           return rest;
         });
       }
@@ -67,19 +68,26 @@ function App() {
   }
 
   function interrupt() {
-    send({ type: "control_request", request_id: crypto.randomUUID(), subtype: "interrupt" });
+    // CLI control_request shape: {type, request_id, request:{subtype:"interrupt"}}
+    send({ type: "control_request", request_id: crypto.randomUUID(), request: { subtype: "interrupt" } });
   }
 
   function respondPerm(req: Event, behavior: "allow" | "deny") {
-    const response =
+    // The CLI's can_use_tool request looks like:
+    //   {type:"control_request", request_id, request:{subtype:"can_use_tool", tool_name, input, tool_use_id, ...}}
+    // Our reply envelope is:
+    //   {type:"control_response", response:{subtype:"success", request_id, response:{behavior, updatedInput?, message?}}}
+    const inner =
       behavior === "allow"
-        ? { behavior: "allow", updatedInput: req.input ?? req.tool_input ?? {} }
-        : { behavior: "deny", message: "Denied by user" };
+        ? { behavior: "allow" as const, updatedInput: req.request?.input ?? req.input ?? {} }
+        : { behavior: "deny" as const, message: "Denied by user" };
     send({
       type: "control_response",
-      request_id: req.request_id,
-      subtype: "success",
-      response,
+      response: {
+        subtype: "success",
+        request_id: req.request_id,
+        response: inner,
+      },
     });
     setPendingPerms((p) => {
       const { [req.request_id]: _g, ...rest } = p;
@@ -181,11 +189,11 @@ function EventRow({
     return null; // noise
   }
 
-  if (ev.type === "control_request" && ev.subtype === "can_use_tool" && pendingPerms[ev.request_id]) {
+  if (ev.type === "control_request" && ev.request?.subtype === "can_use_tool" && pendingPerms[ev.request_id]) {
     return (
       <div className="perm">
-        <div><strong>Tool permission requested</strong>: {ev.tool_name ?? ev.name ?? "?"}</div>
-        <pre style={{ fontSize: 12, whiteSpace: "pre-wrap" }}>{JSON.stringify(ev.input ?? ev.tool_input ?? {}, null, 2)}</pre>
+        <div><strong>Tool permission requested</strong>: {ev.request?.tool_name ?? "?"}</div>
+        <pre style={{ fontSize: 12, whiteSpace: "pre-wrap" }}>{JSON.stringify(ev.request?.input ?? {}, null, 2)}</pre>
         <button className="approve" onClick={() => respondPerm(ev, "allow")}>Approve</button>
         <button className="deny" onClick={() => respondPerm(ev, "deny")}>Deny</button>
       </div>
@@ -193,7 +201,9 @@ function EventRow({
   }
 
   if (ev.type === "control_request" || ev.type === "control_response") {
-    return <div className="debug">{ev.type} {ev.subtype ?? ""} {ev.request_id ?? ""}</div>;
+    const rid = ev.request_id ?? ev.response?.request_id ?? "";
+    const sub = ev.request?.subtype ?? ev.response?.subtype ?? "";
+    return <div className="debug">{ev.type} {sub} {rid}</div>;
   }
 
   return <div className="debug">{ev.type}{ev.subtype ? ":" + ev.subtype : ""}</div>;
