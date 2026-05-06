@@ -31,10 +31,31 @@
   .perm .approve { background: #3a8b3a; color: #fff; }
   .perm .deny { background: #8b3a3a; color: #fff; }
   .debug { font-size: 11px; color: #5a606b; font-family: ui-monospace, monospace; }
-  footer { padding: 8px 12px; background: #181b22; border-top: 1px solid #262a33; display: flex; gap: 6px; }
+  footer { padding: 8px 12px; background: #181b22; border-top: 1px solid #262a33; display: flex; gap: 6px; align-items: stretch; }
+  footer .input-wrap { flex: 1; position: relative; display: flex; align-items: stretch; }
   footer textarea { flex: 1; resize: none; background: #0f1115; color: #e6e6e6; border: 1px solid #262a33; border-radius: 4px; padding: 6px; font: inherit; }
+  footer textarea.shell-on { border-color: #b08a45; background: #150f08; }
   footer button { background: #2e3a8c; color: #fff; border: 0; border-radius: 4px; padding: 0 14px; cursor: pointer; }
   footer button:disabled { opacity: 0.5; cursor: default; }
+  .shell-chip { position: absolute; top: -10px; left: 8px; background: #b08a45; color: #15110a; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 3px; letter-spacing: 0.04em; text-transform: uppercase; pointer-events: none; }
+  .ac-dropdown { position: absolute; bottom: 100%; left: 0; right: 0; margin: 0 0 4px 0; padding: 4px 0; max-height: 240px; overflow-y: auto; background: #14171f; border: 1px solid #2c3242; border-radius: 6px; list-style: none; z-index: 10; box-shadow: 0 4px 14px rgba(0,0,0,0.4); }
+  .ac-dropdown li { display: flex; align-items: center; gap: 8px; padding: 4px 10px; cursor: pointer; font-size: 13px; }
+  .ac-dropdown li.active { background: #1f2a52; }
+  .ac-dropdown li:hover { background: #1a2236; }
+  .ac-tag { font-size: 10px; padding: 1px 5px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.04em; flex-shrink: 0; }
+  .ac-tag.agent { background: #2a3f6b; color: #c8d8ff; }
+  .ac-tag.file { background: #2a4a2a; color: #c0e6c0; }
+  .ac-tag.command { background: #4a2a4a; color: #e6c0e6; }
+  .ac-tag.skill { background: #6b4a20; color: #ffd9a8; }
+  .ac-label { color: #d8dde6; font-family: ui-monospace, monospace; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .shell-panel { background: #0a0c10; border-top: 1px solid #262a33; max-height: 220px; overflow-y: auto; padding: 6px 12px; }
+  .shell-entry { margin: 4px 0; border: 1px solid #2c3242; border-radius: 4px; background: #11131a; }
+  .shell-head { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid #1f242e; font-family: ui-monospace, monospace; font-size: 12px; }
+  .shell-head .shell-prompt { color: #b08a45; }
+  .shell-head .shell-cmd { flex: 1; color: #e6e6e6; word-break: break-all; }
+  .shell-head .shell-dismiss { background: transparent; color: #777f8c; border: 0; cursor: pointer; font-size: 16px; line-height: 1; padding: 0 4px; }
+  .shell-head .shell-dismiss:hover { color: #e6e6e6; }
+  .shell-out { margin: 0; padding: 6px 8px; font-size: 12px; color: #cfd6e3; white-space: pre-wrap; word-break: break-word; max-height: 160px; overflow-y: auto; font-family: ui-monospace, monospace; }
   .md p { margin: 0.3em 0; }
   .md code { background: #0a0c10; padding: 1px 4px; border-radius: 3px; }
   .md pre { background: #0a0c10; padding: 8px; border-radius: 4px; overflow-x: auto; }

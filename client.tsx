@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import Markdown from "react-markdown";
 
@@ -15,15 +15,48 @@ const PERMISSION_MODE_OPTIONS: { value: PermissionMode; label: string }[] = [
   { value: "dontAsk", label: "Don't ask" },
 ];
 
-// In-flight control_request tracker. Currently only set_permission_mode is
-// correlated through here; can_use_tool replies stay in pendingPerms because
-// the human is the slow async actor.
-type InFlight = {
-  kind: "set_permission_mode";
-  mode: PermissionMode;
-  prevMode: PermissionMode;
-  timeoutId: ReturnType<typeof setTimeout>;
+// In-flight control_request tracker.
+//   set_permission_mode  → updates UI mode on success.
+//   file_suggestions     → fills the @-mention dropdown when the doubly-nested
+//                          response payload arrives. We keep callers as
+//                          closures so stale ones (request superseded by a
+//                          newer keystroke) can be discarded.
+type InFlight =
+  | {
+      kind: "set_permission_mode";
+      mode: PermissionMode;
+      prevMode: PermissionMode;
+      timeoutId: ReturnType<typeof setTimeout>;
+    }
+  | {
+      kind: "file_suggestions";
+      query: string;
+      onSuccess: (payload: any) => void;
+      timeoutId: ReturnType<typeof setTimeout>;
+    };
+
+// Shell mode local-output entry rendered below the input.
+type ShellOutput = {
+  id: string;
+  command: string;
+  // Each local_command_output system event carries `content` text. The CLI
+  // may stream multiple chunks per command, so we accumulate by id (we mint
+  // the id client-side and reuse the same one for the request frame's
+  // `uuid` so we can later correlate if the binary echoes it back; for now
+  // we just stash all subsequent local_command_output events under the
+  // most-recent shell command — empirically the binary doesn't tag them).
+  chunks: string[];
 };
+
+// @-mention dropdown item.
+type MentionItem =
+  | { kind: "agent"; name: string }
+  | { kind: "file"; path: string };
+
+// /-command dropdown item.
+type CommandItem =
+  | { kind: "command"; name: string }
+  | { kind: "skill"; name: string };
 
 function App() {
   const [events, setEvents] = useState<Event[]>([]);
@@ -33,11 +66,34 @@ function App() {
   const [activeMode, setActiveMode] = useState<PermissionMode>("default");
   const [pendingMode, setPendingMode] = useState<PermissionMode | null>(null);
   const [modeError, setModeError] = useState<string | null>(null);
+
+  // !/@// affordance state.
+  const [shellMode, setShellMode] = useState(false);
+  const [shellOutputs, setShellOutputs] = useState<ShellOutput[]>([]);
+  const [agents, setAgents] = useState<string[]>([]);
+  const [slashCommands, setSlashCommands] = useState<string[]>([]);
+  const [skills, setSkills] = useState<string[]>([]);
+  // Cursor index into `input` where the active `@` or `/` lives.
+  const [mentionStart, setMentionStart] = useState<number | null>(null);
+  const [mentionMatches, setMentionMatches] = useState<MentionItem[]>([]);
+  const [commandStart, setCommandStart] = useState<number | null>(null);
+  const [commandMatches, setCommandMatches] = useState<CommandItem[]>([]);
+  // Highlighted index in whichever dropdown is open.
+  const [dropdownIndex, setDropdownIndex] = useState(0);
+
   const inFlightRef = useRef<Map<string, InFlight>>(new Map());
   const initSeenRef = useRef(false);
   const errorClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const mainRef = useRef<HTMLElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const fileSuggestDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Keep the last requested file_suggestions query so the dropdown only shows
+  // matches from the freshest in-flight request.
+  const latestFileQueryRef = useRef<string>("");
+  // Stable id of the most recent shell command, used to bucket
+  // local_command_output events.
+  const activeShellIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const ws = new WebSocket(`ws://${location.host}/ws`);
@@ -82,19 +138,26 @@ function App() {
               if (errorClearRef.current) clearTimeout(errorClearRef.current);
               errorClearRef.current = setTimeout(() => setModeError(null), 5000);
             }
+          } else if (flight.kind === "file_suggestions") {
+            if (parsed.response.subtype === "success") {
+              // Per the schema raw zod body, success carries response.response
+              // as { suggestions: Array<{path, score?}> }. Be defensive in
+              // case the binary nests it differently in practice.
+              const inner = parsed.response.response ?? parsed.response;
+              flight.onSuccess(inner);
+            }
+            // No UI action on error — operator just gets no matches.
           }
         }
       }
-      // Capture initial permission mode from system:init (first one only).
+      // Capture initial system:init payload (first one only) — model/mode chip
+      // plus the agents/slash_commands/skills arrays we render in dropdowns.
       if (
         !initSeenRef.current &&
         parsed.type === "system" &&
         parsed.subtype === "init"
       ) {
         initSeenRef.current = true;
-        // The CLI emits permissionMode (camelCase). Empirically it can hold
-        // values like "auto" that aren't in our five-value wire union; only
-        // adopt it if it's a known mode, otherwise fall back to "default".
         const m = parsed.permissionMode ?? parsed.permission_mode;
         const known: PermissionMode[] = [
           "default",
@@ -106,6 +169,66 @@ function App() {
         if (typeof m === "string" && (known as string[]).includes(m)) {
           setActiveMode(m as PermissionMode);
         }
+        if (Array.isArray(parsed.agents)) setAgents(parsed.agents);
+        if (Array.isArray(parsed.slash_commands)) setSlashCommands(parsed.slash_commands);
+        if (Array.isArray(parsed.skills)) setSkills(parsed.skills);
+        console.log("[init] agents", parsed.agents, "slash", parsed.slash_commands, "skills", parsed.skills);
+      }
+      // Bash command echo & output. Empirically the CLI does NOT emit
+      // local_command_output for `bash_command`; instead it round-trips two
+      // user-role events with isReplay:true:
+      //   1. <bash-input>$cmd</bash-input>           (echo of the command)
+      //   2. <bash-stdout>$out</bash-stdout>
+      //      <bash-stderr>$err</bash-stderr>
+      //      <bash-exit-code>$rc</bash-exit-code>     (combined output)
+      // These are technically in the conversation transcript (the binary
+      // re-injects them on resume), but per the schema's "input-only,
+      // output not appended to assistant transcript" semantics we surface
+      // them in the shell panel and suppress them from the main log.
+      if (parsed.type === "user" && parsed.isReplay && typeof parsed.message?.content === "string") {
+        const c = parsed.message.content as string;
+        const stdoutMatch = c.match(/<bash-stdout>([\s\S]*?)<\/bash-stdout>/);
+        const stderrMatch = c.match(/<bash-stderr>([\s\S]*?)<\/bash-stderr>/);
+        const exitMatch = c.match(/<bash-exit-code>([\s\S]*?)<\/bash-exit-code>/);
+        if (stdoutMatch || stderrMatch || exitMatch) {
+          if (activeShellIdRef.current) {
+            const id = activeShellIdRef.current;
+            // HTML-decode the few entities we know the CLI escapes (&amp;
+            // shows up in commands like `cmd1 && cmd2`).
+            const decode = (s: string) =>
+              s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+            const parts: string[] = [];
+            if (stdoutMatch?.[1]) parts.push(decode(stdoutMatch[1]));
+            const stderrText = stderrMatch?.[1];
+            if (stderrText && stderrText.length > 0) parts.push("[stderr] " + decode(stderrText));
+            const rc = exitMatch?.[1];
+            if (rc && rc !== "0") parts.push(`[exit ${rc}]`);
+            const chunk = parts.join("\n");
+            setShellOutputs((prev) =>
+              prev.map((s) => (s.id === id ? { ...s, chunks: [...s.chunks, chunk] } : s))
+            );
+          }
+          return; // suppress from event log
+        }
+        if (c.startsWith("<bash-input>") && c.endsWith("</bash-input>")) {
+          // Pure input echo — already shown in our shell-panel header, drop it.
+          return;
+        }
+      }
+      // Reserve also for the schema-blessed local_command_output channel,
+      // in case the binary uses it for some `!cmd` variants we haven't hit.
+      if (
+        parsed.type === "system" &&
+        parsed.subtype === "local_command_output" &&
+        activeShellIdRef.current
+      ) {
+        const id = activeShellIdRef.current;
+        setShellOutputs((prev) =>
+          prev.map((s) =>
+            s.id === id ? { ...s, chunks: [...s.chunks, String(parsed.content ?? "")] } : s
+          )
+        );
+        return;
       }
       setEvents((prev) => [...prev, parsed]);
     };
@@ -126,16 +249,40 @@ function App() {
     ws.send(line);
   }
 
+  function sendBashCommand(command: string) {
+    // Top-level wire type, NOT wrapped in control_request. Output comes back
+    // out-of-band (likely as system:local_command_output) and should not be
+    // appended to the assistant transcript per the schema's input-only note.
+    const id = crypto.randomUUID();
+    activeShellIdRef.current = id;
+    setShellOutputs((prev) => [...prev, { id, command, chunks: [] }]);
+    send({ type: "bash_command", command });
+  }
+
   function sendPrompt() {
     const text = input.trim();
     if (!text) return;
+
+    // Shell mode: consume `!` prefix if present (the user-visible toggle and
+    // the leading `!` are equivalent affordances, the latter for muscle
+    // memory) and dispatch as bash_command. Closes shell mode after send so
+    // the operator doesn't accidentally repeat-fire shell commands.
+    if (shellMode) {
+      const cmd = text.startsWith("!") ? text.slice(1).trimStart() : text;
+      if (cmd) sendBashCommand(cmd);
+      setInput("");
+      setShellMode(false);
+      closeAllDropdowns();
+      return;
+    }
+
     setEvents((prev) => [...prev, { type: "_local_user", text }]);
     send({ type: "user", message: { role: "user", content: text } });
     setInput("");
+    closeAllDropdowns();
   }
 
   function interrupt() {
-    // CLI control_request shape: {type, request_id, request:{subtype:"interrupt"}}
     send({ type: "control_request", request_id: crypto.randomUUID(), request: { subtype: "interrupt" } });
   }
 
@@ -150,7 +297,6 @@ function App() {
       errorClearRef.current = null;
     }
     const timeoutId = setTimeout(() => {
-      // Only act if this request is still in flight.
       if (!inFlightRef.current.has(requestId)) return;
       inFlightRef.current.delete(requestId);
       setPendingMode(null);
@@ -172,10 +318,6 @@ function App() {
   }
 
   function respondPerm(req: Event, behavior: "allow" | "deny") {
-    // The CLI's can_use_tool request looks like:
-    //   {type:"control_request", request_id, request:{subtype:"can_use_tool", tool_name, input, tool_use_id, ...}}
-    // Our reply envelope is:
-    //   {type:"control_response", response:{subtype:"success", request_id, response:{behavior, updatedInput?, message?}}}
     const inner =
       behavior === "allow"
         ? { behavior: "allow" as const, updatedInput: req.request?.input ?? req.input ?? {} }
@@ -192,6 +334,275 @@ function App() {
       const { [req.request_id]: _g, ...rest } = p;
       return rest;
     });
+  }
+
+  // ---- !/@// affordance helpers --------------------------------------
+
+  function closeAllDropdowns() {
+    setMentionStart(null);
+    setMentionMatches([]);
+    setCommandStart(null);
+    setCommandMatches([]);
+    setDropdownIndex(0);
+  }
+
+  function dismissShellOutput(id: string) {
+    setShellOutputs((prev) => prev.filter((s) => s.id !== id));
+  }
+
+  function requestFileSuggestions(query: string) {
+    latestFileQueryRef.current = query;
+    const requestId = crypto.randomUUID();
+    const timeoutId = setTimeout(() => {
+      inFlightRef.current.delete(requestId);
+    }, 5000);
+    inFlightRef.current.set(requestId, {
+      kind: "file_suggestions",
+      query,
+      onSuccess: (payload) => {
+        // Stale-response guard: if a newer keystroke fired since this request,
+        // drop this payload on the floor.
+        if (latestFileQueryRef.current !== query) return;
+        const sugg = Array.isArray(payload?.suggestions) ? payload.suggestions : [];
+        // Combine with agents (only when query has no path-shaped chars).
+        const isPathy = query.includes("/") || query.includes(".");
+        const ql = query.toLowerCase();
+        const agentMatches: MentionItem[] = isPathy
+          ? []
+          : agents
+              .filter((a) => !ql || a.toLowerCase().includes(ql))
+              .map((name) => ({ kind: "agent" as const, name }));
+        const fileMatches: MentionItem[] = sugg
+          .filter((s: any) => typeof s?.path === "string")
+          .map((s: any) => ({ kind: "file" as const, path: s.path }));
+        const combined = [...agentMatches.slice(0, 5), ...fileMatches.slice(0, 15)];
+        setMentionMatches(combined);
+        setDropdownIndex(0);
+      },
+      timeoutId,
+    });
+    send({
+      type: "control_request",
+      request_id: requestId,
+      request: { subtype: "file_suggestions", query },
+    });
+  }
+
+  // Compute matches synchronously for `@` with no query (agents only) and `/`.
+  function computeAgentOnlyMatches(): MentionItem[] {
+    return agents.slice(0, 8).map((name) => ({ kind: "agent" as const, name }));
+  }
+
+  function computeCommandMatches(query: string): CommandItem[] {
+    const ql = query.toLowerCase();
+    const cmdItems: CommandItem[] = slashCommands
+      .filter((n) => !ql || n.toLowerCase().includes(ql))
+      .map((name) => ({ kind: "command" as const, name }));
+    const skillItems: CommandItem[] = skills
+      .filter((n) => !ql || n.toLowerCase().includes(ql))
+      .map((name) => ({ kind: "skill" as const, name }));
+    return [...cmdItems, ...skillItems].slice(0, 20);
+  }
+
+  // Re-derive autocomplete state from the input + caret position. Called from
+  // onChange and onKeyUp / onClick on the textarea.
+  function refreshAutocomplete(value: string, caret: number) {
+    // `/` autocomplete: only when the input STARTS with `/` and caret is
+    // within the leading slash-token. This matches CLI behavior — a slash
+    // anywhere else is just literal text.
+    if (value.startsWith("/")) {
+      // Find end of slash-token (first whitespace, or eol).
+      const ws = value.search(/\s/);
+      const tokenEnd = ws === -1 ? value.length : ws;
+      if (caret <= tokenEnd) {
+        const query = value.slice(1, caret);
+        setCommandStart(0);
+        setCommandMatches(computeCommandMatches(query));
+        setDropdownIndex(0);
+        // Make sure mention dropdown isn't competing.
+        setMentionStart(null);
+        setMentionMatches([]);
+        return;
+      }
+    }
+    setCommandStart(null);
+    setCommandMatches([]);
+
+    // `@` autocomplete: scan back from caret to find an unbroken
+    // non-whitespace `@`-prefixed token. Only trigger if the `@` is at start
+    // of input or preceded by whitespace.
+    let i = caret - 1;
+    while (i >= 0 && !/\s/.test(value[i]!)) i--;
+    const tokenStart = i + 1;
+    const tokenSlice = value.slice(tokenStart, caret);
+    if (tokenSlice.startsWith("@")) {
+      const query = tokenSlice.slice(1);
+      setMentionStart(tokenStart);
+      // Empty / non-pathy query: agents only synchronously.
+      const isPathy = query.includes("/") || query.includes(".");
+      if (!query) {
+        setMentionMatches(computeAgentOnlyMatches());
+        setDropdownIndex(0);
+        latestFileQueryRef.current = ""; // disarm any stale file response
+      } else if (!isPathy) {
+        // Show agents immediately (synchronous), fire file_suggestions
+        // request in the background; the response handler will merge in
+        // file matches.
+        setMentionMatches(
+          agents
+            .filter((a) => a.toLowerCase().includes(query.toLowerCase()))
+            .slice(0, 8)
+            .map((name) => ({ kind: "agent" as const, name }))
+        );
+        setDropdownIndex(0);
+        scheduleFileSuggestions(query);
+      } else {
+        // Pathy query: skip agents, fire file request.
+        setMentionMatches([]);
+        setDropdownIndex(0);
+        scheduleFileSuggestions(query);
+      }
+      return;
+    }
+    setMentionStart(null);
+    setMentionMatches([]);
+  }
+
+  function scheduleFileSuggestions(query: string) {
+    if (fileSuggestDebounceRef.current) clearTimeout(fileSuggestDebounceRef.current);
+    fileSuggestDebounceRef.current = setTimeout(() => {
+      requestFileSuggestions(query);
+    }, 150);
+  }
+
+  // Apply a selected dropdown item to the input.
+  function applyMention(item: MentionItem) {
+    if (mentionStart == null) return;
+    // Find current end of the @-token (caret might have advanced; we just
+    // replace from mentionStart to next whitespace / eol).
+    const after = input.slice(mentionStart);
+    const wsIdx = after.search(/\s/);
+    const tokenEnd = wsIdx === -1 ? input.length : mentionStart + wsIdx;
+    const replacement = item.kind === "agent" ? `@${item.name}` : `@${item.path}`;
+    const next = input.slice(0, mentionStart) + replacement + " " + input.slice(tokenEnd);
+    setInput(next);
+    closeAllDropdowns();
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current;
+      if (ta) {
+        const pos = mentionStart + replacement.length + 1;
+        ta.focus();
+        ta.setSelectionRange(pos, pos);
+      }
+    });
+  }
+
+  function applyCommand(item: CommandItem) {
+    // Replace the leading slash-token with `/<name> `.
+    const ws = input.search(/\s/);
+    const tokenEnd = ws === -1 ? input.length : ws;
+    const next = `/${item.name} ` + input.slice(tokenEnd).replace(/^\s*/, "");
+    setInput(next);
+    closeAllDropdowns();
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current;
+      if (ta) {
+        const pos = next.length;
+        ta.focus();
+        ta.setSelectionRange(pos, pos);
+      }
+    });
+  }
+
+  // Whichever dropdown is open right now (mutually exclusive).
+  const dropdownOpen: "mention" | "command" | null =
+    mentionStart != null && mentionMatches.length > 0
+      ? "mention"
+      : commandStart != null && commandMatches.length > 0
+      ? "command"
+      : null;
+
+  function handleTextareaKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // Esc closes any open dropdown OR exits shell mode (in that order).
+    if (e.key === "Escape") {
+      if (dropdownOpen) {
+        e.preventDefault();
+        closeAllDropdowns();
+        return;
+      }
+      if (shellMode) {
+        e.preventDefault();
+        setShellMode(false);
+        return;
+      }
+    }
+
+    // Shell-mode entry: lone `!` typed at start of empty input toggles shell.
+    // We watch via onChange as well, but handling it in keydown lets us also
+    // exit on backspace-at-start.
+    if (e.key === "Backspace" && shellMode && input.length === 0) {
+      e.preventDefault();
+      setShellMode(false);
+      return;
+    }
+
+    if (dropdownOpen) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        const len = dropdownOpen === "mention" ? mentionMatches.length : commandMatches.length;
+        setDropdownIndex((i) => (i + 1) % Math.max(len, 1));
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        const len = dropdownOpen === "mention" ? mentionMatches.length : commandMatches.length;
+        setDropdownIndex((i) => (i - 1 + Math.max(len, 1)) % Math.max(len, 1));
+        return;
+      }
+      if (e.key === "Tab" || e.key === "Enter") {
+        e.preventDefault();
+        if (dropdownOpen === "mention") {
+          const item = mentionMatches[dropdownIndex];
+          if (item) applyMention(item);
+        } else {
+          const item = commandMatches[dropdownIndex];
+          if (item) applyCommand(item);
+        }
+        return;
+      }
+    }
+
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      sendPrompt();
+    }
+  }
+
+  function handleTextareaChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const next = e.target.value;
+    // Auto-enable shell mode if the input STARTS with `!` and there's no
+    // leading whitespace. We don't strip the `!` from the input — we just
+    // flip the indicator, and sendPrompt() peels the prefix on send.
+    if (!shellMode && next.startsWith("!")) {
+      setShellMode(true);
+      // Strip the bang from the visible input — the shell-mode chip already
+      // tells the user this is a shell command, so the leading `!` would be
+      // duplicate signal.
+      setInput(next.slice(1));
+      e.target.value = next.slice(1);
+      // No autocomplete in shell mode.
+      closeAllDropdowns();
+      return;
+    }
+    setInput(next);
+    refreshAutocomplete(next, e.target.selectionStart ?? next.length);
+  }
+
+  function handleTextareaCaret(e: React.SyntheticEvent<HTMLTextAreaElement>) {
+    // Re-evaluate autocomplete on cursor moves (arrow keys, clicks). Without
+    // this, e.g. arrowing back to mid-`@token` wouldn't reopen the dropdown.
+    const ta = e.currentTarget;
+    refreshAutocomplete(ta.value, ta.selectionStart ?? ta.value.length);
   }
 
   // Pre-compute init system event for the header chip.
@@ -224,19 +635,83 @@ function App() {
           <EventRow key={i} ev={ev} pendingPerms={pendingPerms} respondPerm={respondPerm} allEvents={events} />
         ))}
       </main>
+      {shellOutputs.length > 0 && (
+        <div className="shell-panel">
+          {shellOutputs.map((s) => (
+            <div className="shell-entry" key={s.id}>
+              <div className="shell-head">
+                <span className="shell-prompt">$</span>
+                <span className="shell-cmd">{s.command}</span>
+                <button className="shell-dismiss" onClick={() => dismissShellOutput(s.id)} title="Dismiss">×</button>
+              </div>
+              {s.chunks.length > 0 && (
+                <pre className="shell-out">{s.chunks.join("")}</pre>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
       <footer>
-        <textarea
-          rows={2}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault();
-              sendPrompt();
+        <div className="input-wrap">
+          {shellMode && <span className="shell-chip">Shell</span>}
+          <textarea
+            ref={textareaRef}
+            rows={2}
+            value={input}
+            onChange={handleTextareaChange}
+            onKeyDown={handleTextareaKey}
+            onKeyUp={handleTextareaCaret}
+            onClick={handleTextareaCaret}
+            onBlur={() => {
+              // Slight delay so click on dropdown can land first.
+              setTimeout(() => closeAllDropdowns(), 100);
+            }}
+            placeholder={
+              shellMode
+                ? "run a shell command…"
+                : "Type a prompt — Cmd/Ctrl+Enter to send · ! for shell · @ to mention · / for commands"
             }
-          }}
-          placeholder="Type a prompt — Cmd/Ctrl+Enter to send"
-        />
+            className={shellMode ? "shell-on" : undefined}
+          />
+          {dropdownOpen === "mention" && (
+            <ul className="ac-dropdown" role="listbox">
+              {mentionMatches.map((m, i) => (
+                <li
+                  key={(m.kind === "agent" ? "a:" : "f:") + (m.kind === "agent" ? m.name : m.path)}
+                  className={i === dropdownIndex ? "active" : ""}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    applyMention(m);
+                  }}
+                >
+                  <span className={"ac-tag " + (m.kind === "agent" ? "agent" : "file")}>
+                    {m.kind === "agent" ? "agent" : "file"}
+                  </span>
+                  <span className="ac-label">{m.kind === "agent" ? m.name : m.path}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {dropdownOpen === "command" && (
+            <ul className="ac-dropdown" role="listbox">
+              {commandMatches.map((m, i) => (
+                <li
+                  key={m.kind + ":" + m.name}
+                  className={i === dropdownIndex ? "active" : ""}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    applyCommand(m);
+                  }}
+                >
+                  <span className={"ac-tag " + (m.kind === "command" ? "command" : "skill")}>
+                    {m.kind === "command" ? "command" : "skill"}
+                  </span>
+                  <span className="ac-label">/{m.name}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
         <button onClick={sendPrompt} disabled={!connected}>Send</button>
       </footer>
     </>
@@ -327,7 +802,6 @@ function ContentBlock({ block, allEvents }: { block: any; allEvents: Event[] }) 
     return <div className="md"><Markdown>{block.text || ""}</Markdown></div>;
   }
   if (block.type === "tool_use") {
-    // Find a matching tool_result by tool_use_id in any subsequent user message content.
     let result: any = null;
     for (const ev of allEvents) {
       if (ev?.message?.content && Array.isArray(ev.message.content)) {
