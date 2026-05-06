@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import Markdown from "react-markdown";
 
@@ -43,15 +43,63 @@ type HookEntry = {
   raw: any;
 };
 
-type PermissionMode = "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk";
+// Single source of truth for permission modes. `inCycle: true` means the
+// entry participates in the Shift+Tab cycle (mirrors the binary's
+// getNextPermissionMode at v2.1.132); array order IS the cycle order.
+// Set `inCycle: false` for modes that are dropdown-selectable but not part
+// of the rotation (e.g. dontAsk — the binary's switch falls back to default
+// when it lands there).
+const PERMISSION_MODE_DEFS = [
+  { value: "default",           label: "Default (ask)",                    inCycle: true  },
+  { value: "acceptEdits",       label: "Auto-accept edits",                inCycle: true  },
+  { value: "plan",              label: "Plan mode (no tool execution)",    inCycle: true  },
+  { value: "bypassPermissions", label: "Bypass all (dangerous)",           inCycle: true  },
+  { value: "auto",              label: "Auto (classifier)",                inCycle: true  },
+  { value: "dontAsk",           label: "Don't ask",                        inCycle: false },
+] as const;
 
-const PERMISSION_MODE_OPTIONS: { value: PermissionMode; label: string }[] = [
-  { value: "default", label: "Default (ask)" },
-  { value: "acceptEdits", label: "Auto-accept edits" },
-  { value: "bypassPermissions", label: "Bypass all (dangerous)" },
-  { value: "plan", label: "Plan mode (no tool execution)" },
-  { value: "dontAsk", label: "Don't ask" },
-];
+type PermissionMode = (typeof PERMISSION_MODE_DEFS)[number]["value"];
+const PERMISSION_MODE_OPTIONS: { value: PermissionMode; label: string }[] =
+  PERMISSION_MODE_DEFS.map((m) => ({ value: m.value, label: m.label }));
+const KNOWN_PERMISSION_MODES: readonly PermissionMode[] =
+  PERMISSION_MODE_DEFS.map((m) => m.value);
+const CYCLE_ORDER: readonly PermissionMode[] = PERMISSION_MODE_DEFS
+  .filter((m) => m.inCycle)
+  .map((m) => m.value);
+
+function nextCycleMode(current: PermissionMode): PermissionMode {
+  const idx = CYCLE_ORDER.indexOf(current);
+  if (idx === -1) return "default";
+  return CYCLE_ORDER[(idx + 1) % CYCLE_ORDER.length]!;
+}
+
+// Single source of truth for selectable model names. set_model takes the
+// model id verbatim; the binary resolves aliases. Order = display order.
+const MODEL_DEFS = [
+  { value: "claude-opus-4-7",   label: "Opus 4.7" },
+  { value: "claude-opus-4-6",   label: "Opus 4.6" },
+  { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
+  { value: "claude-haiku-4-5",  label: "Haiku 4.5" },
+] as const;
+type Model = (typeof MODEL_DEFS)[number]["value"];
+const MODEL_OPTIONS: { value: Model; label: string }[] =
+  MODEL_DEFS.map((m) => ({ value: m.value, label: m.label }));
+const KNOWN_MODELS: readonly Model[] = MODEL_DEFS.map((m) => m.value);
+
+// Single source of truth for effort levels. The CLI accepts these via
+// `--effort <level>` at launch only — there is no set_effort
+// control_request, so changing effort mid-session triggers a respawn.
+const EFFORT_DEFS = [
+  { value: "low",    label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high",   label: "High" },
+  { value: "max",    label: "Max" },
+  { value: "xhigh",  label: "xHigh" },
+] as const;
+type Effort = (typeof EFFORT_DEFS)[number]["value"];
+const EFFORT_OPTIONS: { value: Effort; label: string }[] =
+  EFFORT_DEFS.map((e) => ({ value: e.value, label: e.label }));
+const KNOWN_EFFORTS: readonly Effort[] = EFFORT_DEFS.map((e) => e.value);
 
 // In-flight control_request tracker.
 //   set_permission_mode  → updates UI mode on success.
@@ -70,6 +118,18 @@ type InFlight =
       kind: "file_suggestions";
       query: string;
       onSuccess: (payload: any) => void;
+      timeoutId: ReturnType<typeof setTimeout>;
+    }
+  | {
+      kind: "set_model";
+      model: Model;
+      prevModel: Model | "";
+      timeoutId: ReturnType<typeof setTimeout>;
+    }
+  | {
+      kind: "respawn-effort";
+      effort: Effort;
+      prevEffort: Effort | "";
       timeoutId: ReturnType<typeof setTimeout>;
     };
 
@@ -119,6 +179,22 @@ function App() {
   const [activeMode, setActiveMode] = useState<PermissionMode>("default");
   const [pendingMode, setPendingMode] = useState<PermissionMode | null>(null);
   const [modeError, setModeError] = useState<string | null>(null);
+
+  // Model selector state. activeModel tracks what claude is actually using
+  // (seeded from system:init.model when it matches a known value), and
+  // pendingModel covers the optimistic in-flight set_model request window.
+  const [activeModel, setActiveModel] = useState<Model | "">("");
+  const [pendingModel, setPendingModel] = useState<Model | null>(null);
+  const [modelError, setModelError] = useState<string | null>(null);
+  const modelErrorClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Effort selector state. system:init does not carry effort, so
+  // activeEffort starts blank ("(launch default)" placeholder) — operator
+  // sets it explicitly. Pending tracks the respawn window.
+  const [activeEffort, setActiveEffort] = useState<Effort | "">("");
+  const [pendingEffort, setPendingEffort] = useState<Effort | null>(null);
+  const [effortError, setEffortError] = useState<string | null>(null);
+  const effortErrorClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // !/@// affordance state.
   const [shellMode, setShellMode] = useState<ShellMode>("off");
@@ -186,6 +262,32 @@ function App() {
         return;
       }
       console.log("[recv]", parsed);
+      // Server-side respawn result for the effort selector. ok:true → swap
+      // activeEffort to the in-flight effort and clear pendingEffort. The
+      // post-respawn system:init that arrives shortly will also reseat the
+      // model chip naturally.
+      if (parsed?._local === "respawnResult" && typeof parsed.requestId === "string") {
+        const flight = inFlightRef.current.get(parsed.requestId);
+        if (flight && flight.kind === "respawn-effort") {
+          inFlightRef.current.delete(parsed.requestId);
+          clearTimeout(flight.timeoutId);
+          if (parsed.ok === true) {
+            setActiveEffort(flight.effort);
+            setPendingEffort(null);
+            setEffortError(null);
+          } else {
+            const errMsg = typeof parsed.error === "string" ? parsed.error : "unknown error";
+            setPendingEffort(null);
+            setEffortError(`could not change effort to ${flight.effort}: ${errMsg}`);
+            if (effortErrorClearRef.current) clearTimeout(effortErrorClearRef.current);
+            effortErrorClearRef.current = setTimeout(() => setEffortError(null), 5000);
+          }
+          // After a respawn we want the next system:init to re-seed the
+          // chip / model, so allow it to be processed again.
+          initSeenRef.current = false;
+        }
+        return;
+      }
       // Server-side context-shell result. Match by requestId, fill in the
       // ShellOutput entry, then construct + send an SDKUserMessage so the
       // model sees the command + output on its next turn. Optional follow-up
@@ -255,9 +357,26 @@ function App() {
             } else {
               const errMsg = parsed.response.error ?? "unknown error";
               setPendingMode(null);
-              setModeError(`could not change to ${flight.mode}: ${errMsg}`);
-              if (errorClearRef.current) clearTimeout(errorClearRef.current);
-              errorClearRef.current = setTimeout(() => setModeError(null), 5000);
+              // Auto-advance: if a forbidden mode (e.g. bypassPermissions
+              // when the session wasn't launched with
+              // --dangerously-skip-permissions) blocked us, skip to the
+              // next cycle slot so cycling doesn't get stuck. Only triggers
+              // for modes that participate in the cycle; explicit dropdown
+              // picks of out-of-cycle modes (dontAsk) just surface the
+              // error without auto-advancing.
+              if (CYCLE_ORDER.includes(flight.mode)) {
+                const skip = nextCycleMode(flight.mode);
+                setModeError(`${flight.mode} not allowed (${errMsg}) — skipping to ${skip}`);
+                if (errorClearRef.current) clearTimeout(errorClearRef.current);
+                errorClearRef.current = setTimeout(() => setModeError(null), 5000);
+                // Defer one tick so React commits pendingMode=null before
+                // the next changeMode reads it.
+                setTimeout(() => changeMode(skip), 0);
+              } else {
+                setModeError(`could not change to ${flight.mode}: ${errMsg}`);
+                if (errorClearRef.current) clearTimeout(errorClearRef.current);
+                errorClearRef.current = setTimeout(() => setModeError(null), 5000);
+              }
             }
           } else if (flight.kind === "file_suggestions") {
             if (parsed.response.subtype === "success") {
@@ -268,6 +387,18 @@ function App() {
               flight.onSuccess(inner);
             }
             // No UI action on error — operator just gets no matches.
+          } else if (flight.kind === "set_model") {
+            if (parsed.response.subtype === "success") {
+              setActiveModel(flight.model);
+              setPendingModel(null);
+              setModelError(null);
+            } else {
+              const errMsg = parsed.response.error ?? "unknown error";
+              setPendingModel(null);
+              setModelError(`could not change model to ${flight.model}: ${errMsg}`);
+              if (modelErrorClearRef.current) clearTimeout(modelErrorClearRef.current);
+              modelErrorClearRef.current = setTimeout(() => setModelError(null), 5000);
+            }
           }
         }
       }
@@ -280,15 +411,14 @@ function App() {
       ) {
         initSeenRef.current = true;
         const m = parsed.permissionMode ?? parsed.permission_mode;
-        const known: PermissionMode[] = [
-          "default",
-          "acceptEdits",
-          "bypassPermissions",
-          "plan",
-          "dontAsk",
-        ];
-        if (typeof m === "string" && (known as string[]).includes(m)) {
+        if (typeof m === "string" && (KNOWN_PERMISSION_MODES as readonly string[]).includes(m)) {
           setActiveMode(m as PermissionMode);
+        }
+        // Seed activeModel from init.model if it matches a known value.
+        // Otherwise leave it blank so the placeholder option shows.
+        const im = typeof parsed.model === "string" ? parsed.model : "";
+        if (im && (KNOWN_MODELS as readonly string[]).includes(im)) {
+          setActiveModel(im as Model);
         }
         if (Array.isArray(parsed.agents)) setAgents(parsed.agents);
         if (Array.isArray(parsed.slash_commands)) setSlashCommands(parsed.slash_commands);
@@ -506,6 +636,24 @@ function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Global Shift+Tab cycles permission modes, mirroring the TUI's
+  // getNextPermissionMode (default → acceptEdits → plan → bypassPermissions
+  // → auto → default). Skips while a set_permission_mode is in flight so
+  // back-to-back presses don't queue stale changes.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.shiftKey || e.key !== "Tab") return;
+      // Always preventDefault so focus stays put even while a previous
+      // set_permission_mode is mid-flight; the browser otherwise reads our
+      // no-op early-return as "no handler" and runs the focus-cycle default.
+      e.preventDefault();
+      if (pendingMode != null) return;
+      changeMode(nextCycleMode(activeMode));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [activeMode, pendingMode]);
+
   function send(frame: any) {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
@@ -616,6 +764,68 @@ function App() {
       request_id: requestId,
       request: { subtype: "set_permission_mode", mode: next },
     });
+  }
+
+  function changeModel(next: Model) {
+    if (!next) return;
+    if (next === activeModel || pendingModel != null) return;
+    const requestId = crypto.randomUUID();
+    const prevModel = activeModel;
+    setPendingModel(next);
+    setModelError(null);
+    if (modelErrorClearRef.current) {
+      clearTimeout(modelErrorClearRef.current);
+      modelErrorClearRef.current = null;
+    }
+    const timeoutId = setTimeout(() => {
+      if (!inFlightRef.current.has(requestId)) return;
+      inFlightRef.current.delete(requestId);
+      setPendingModel(null);
+      setModelError(`could not change model to ${next}: timed out after 30s`);
+      if (modelErrorClearRef.current) clearTimeout(modelErrorClearRef.current);
+      modelErrorClearRef.current = setTimeout(() => setModelError(null), 5000);
+    }, 30_000);
+    inFlightRef.current.set(requestId, {
+      kind: "set_model",
+      model: next,
+      prevModel,
+      timeoutId,
+    });
+    send({
+      type: "control_request",
+      request_id: requestId,
+      request: { subtype: "set_model", model: next },
+    });
+  }
+
+  function changeEffort(next: Effort) {
+    if (!next) return;
+    if (next === activeEffort || pendingEffort != null) return;
+    const requestId = crypto.randomUUID();
+    const prevEffort = activeEffort;
+    setPendingEffort(next);
+    setEffortError(null);
+    if (effortErrorClearRef.current) {
+      clearTimeout(effortErrorClearRef.current);
+      effortErrorClearRef.current = null;
+    }
+    const timeoutId = setTimeout(() => {
+      if (!inFlightRef.current.has(requestId)) return;
+      inFlightRef.current.delete(requestId);
+      setPendingEffort(null);
+      setEffortError(`could not change effort to ${next}: timed out after 60s`);
+      if (effortErrorClearRef.current) clearTimeout(effortErrorClearRef.current);
+      effortErrorClearRef.current = setTimeout(() => setEffortError(null), 5000);
+    }, 60_000);
+    inFlightRef.current.set(requestId, {
+      kind: "respawn-effort",
+      effort: next,
+      prevEffort,
+      timeoutId,
+    });
+    // Local frame; never reaches claude. Server kills the existing child
+    // and respawns it with extraArgs appended to BASE_CLAUDE_ARGS.
+    send({ _local: "respawn", extraArgs: ["--effort", next], requestId });
   }
 
   function respondPerm(req: Event, behavior: "allow" | "deny") {
@@ -924,20 +1134,6 @@ function App() {
         <div className="chip">
           {connected ? (init ? `model: ${init.model ?? "?"} · cwd: ${init.cwd ?? "?"}` : "connected, waiting for init…") : "disconnected"}
         </div>
-        <div className="mode-control">
-          <select
-            className="mode-select"
-            value={pendingMode ?? activeMode}
-            onChange={(e) => changeMode(e.target.value as PermissionMode)}
-            disabled={!connected || pendingMode != null}
-            title="Permission mode"
-          >
-            {PERMISSION_MODE_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-          {modeError && <span className="mode-error">{modeError}</span>}
-        </div>
         <button onClick={interrupt} disabled={!connected}>Interrupt</button>
       </header>
       <main ref={mainRef}>
@@ -1008,6 +1204,48 @@ function App() {
         </div>
       )}
       <footer>
+        <div className="mode-control">
+          <select
+            className="mode-select"
+            value={pendingMode ?? activeMode}
+            onChange={(e) => changeMode(e.target.value as PermissionMode)}
+            disabled={!connected || pendingMode != null}
+            title="Permission mode (Shift+Tab to cycle)"
+          >
+            {PERMISSION_MODE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          <select
+            className="mode-select"
+            value={pendingModel ?? activeModel}
+            onChange={(e) => changeModel(e.target.value as Model)}
+            disabled={!connected || pendingModel != null}
+            title="Model (set_model control_request, in-process)"
+          >
+            <option value="">(model)</option>
+            {MODEL_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          <select
+            className="mode-select"
+            value={pendingEffort ?? activeEffort}
+            onChange={(e) => changeEffort(e.target.value as Effort)}
+            disabled={!connected || pendingEffort != null}
+            title="Effort level (kills + respawns claude with --effort; conversation continues via --continue)"
+          >
+            <option value="">(launch default)</option>
+            {EFFORT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          <span className="mode-hint">Shift+Tab to cycle</span>
+          {modeError && <span className="mode-error">{modeError}</span>}
+          {modelError && <span className="mode-error">{modelError}</span>}
+          {effortError && <span className="mode-error">{effortError}</span>}
+        </div>
+        <div className="input-row">
         <div className="input-wrap">
           {shellMode === "context" && (
             <span className="shell-chip context">Shell + context</span>
@@ -1076,6 +1314,7 @@ function App() {
           )}
         </div>
         <button onClick={sendPrompt} disabled={!connected}>Send</button>
+        </div>
       </footer>
     </>
   );

@@ -31,7 +31,13 @@
   .perm .approve { background: #3a8b3a; color: #fff; }
   .perm .deny { background: #8b3a3a; color: #fff; }
   .debug { font-size: 11px; color: #5a606b; font-family: ui-monospace, monospace; }
-  footer { padding: 8px 12px; background: #181b22; border-top: 1px solid #262a33; display: flex; gap: 6px; align-items: stretch; }
+  footer { padding: 8px 12px; background: #181b22; border-top: 1px solid #262a33; display: flex; flex-direction: column; gap: 6px; }
+  footer .mode-control { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #9aa0a8; flex-wrap: wrap; }
+  footer .mode-select { background: #0f1115; color: #e6e6e6; border: 1px solid #262a33; border-radius: 4px; padding: 4px 8px; font: inherit; font-size: 12px; cursor: pointer; max-width: 200px; }
+  footer .mode-select:disabled { opacity: 0.5; cursor: default; }
+  footer .mode-hint { font-size: 11px; color: #5a606b; }
+  footer .mode-error { font-size: 11px; color: #ff6b6b; max-width: 280px; }
+  footer .input-row { display: flex; gap: 6px; align-items: stretch; }
   footer .input-wrap { flex: 1; position: relative; display: flex; align-items: stretch; }
   footer textarea { flex: 1; resize: none; background: #0f1115; color: #e6e6e6; border: 1px solid #262a33; border-radius: 4px; padding: 6px; font: inherit; }
   footer textarea.shell-on { border-color: #b08a45; background: #150f08; }
