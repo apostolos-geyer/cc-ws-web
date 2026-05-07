@@ -3,11 +3,13 @@
 //   1. Claude Code stream-json frames (forwarded verbatim to/from the child).
 //   2. _local frames (intercepted by the bridge, never reach the child).
 //
-// Field sets are pulled from the binary's own runtime schemas (see
-// apps/slopbox/.spec/artifacts/extracted/canonical.json in the platform
-// repo). Variants we don't actively consume still ride the same
-// discriminated union so consumers can narrow without `as any` escape
-// hatches. Unknown system subtypes fall through to UnknownSystemFrame.
+// Field sets are pulled from the binary's own runtime Zod schemas. Run
+// `bun packages/client/scripts/extract-claude-schemas.ts extract` against
+// the active `claude` binary to reproduce — see scripts/README.md for the
+// runbook + drift-detection workflow. Variants we don't actively consume
+// still ride the same discriminated union so consumers can narrow
+// without `as any` escape hatches. Unknown system subtypes fall through
+// to UnknownSystemFrame. Pinned to v2.1.129 (2026-05-05).
 
 // ---------- shared ----------
 
