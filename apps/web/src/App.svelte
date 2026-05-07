@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { setCcSession } from "@somewhatintelligent/cc-ws-svelte";
-  import { session } from "./lib/session.svelte";
+  import { createSession } from "./lib/session.svelte";
   import { installKeymap } from "./lib/keymap";
   import { installSessionTracker } from "./lib/sessionHistory.svelte";
   import { ui, openPanel } from "./lib/ui.svelte";
@@ -11,13 +11,32 @@
   import StatusFooter from "./components/StatusFooter.svelte";
   import PanelHost from "./components/panels/PanelHost.svelte";
 
+  let {
+    wsUrl,
+    storageKey,
+    installKeybinds = true,
+  }: {
+    wsUrl?: string;
+    storageKey?: string;
+    installKeybinds?: boolean;
+  } = $props();
+
+  // Construct the session inside the component so each App instance is
+  // self-contained — embedding two <cc-ws-chat> elements on one page
+  // gives each its own bridge connection + persistence + atoms. Read
+  // props via untrack: we capture the values at mount time on purpose
+  // and don't react to subsequent prop changes (would be a session swap,
+  // not what consumers usually mean).
+  const session = createSession({
+    wsUrl: untrack(() => wsUrl),
+    storageKey: untrack(() => storageKey),
+  });
   setCcSession(session);
 
   const { pendingPermissions } = session.atoms;
 
-  // Auto-pop the permissions panel when a new request arrives, but only if
-  // no other panel is open and the user hasn't disabled it. The flag stays
-  // armed once the user clears the queue.
+  // Pop the permissions panel when a new request arrives, only if no
+  // panel is open and the user hasn't disabled the auto-pop.
   let lastPendCount = $state(0);
   $effect(() => {
     const n = $pendingPermissions.length;
@@ -28,11 +47,12 @@
   });
 
   onMount(() => {
-    const offKey = installKeymap(session);
     const offHist = installSessionTracker(session);
+    const offKey = installKeybinds ? installKeymap(session) : () => {};
     return () => {
-      offKey();
       offHist();
+      offKey();
+      session.disconnect();
     };
   });
 </script>

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>cc-ws-chat embed demo</title>
+    <style>
+      :root { color-scheme: dark; }
+      html, body { margin: 0; padding: 0; height: 100%; background: #0d0d0e; color: #e6e6e8; font-family: ui-sans-serif, system-ui, sans-serif; }
+      .page { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+      header { padding: 14px 24px; border-bottom: 1px solid #1c1c20; display: flex; gap: 16px; align-items: baseline; }
+      header h1 { margin: 0; font-size: 14px; font-weight: 600; }
+      header .dim { color: #6b6b72; font-size: 12px; }
+      cc-ws-chat { display: block; height: 100%; min-height: 0; }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header>
+        <h1>cc-ws-chat</h1>
+        <span class="dim">embed demo · ws://localhost:3000/ws</span>
+      </header>
+      <cc-ws-chat ws-url="ws://localhost:3000/ws" storage-key="cc-ws-embed-demo" keybinds></cc-ws-chat>
+    </div>
+    <script src="./dist-embed/cc-ws-chat.js"></script>
+  </body>
+</html>
