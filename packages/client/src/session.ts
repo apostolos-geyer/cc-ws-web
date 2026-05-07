@@ -1,5 +1,4 @@
-// Session controller — composes ws + messages + controls + permissions into a
-// single reactive client. See LIB-DESIGN.md for the full API contract.
+// See LIB-DESIGN.md for the full API contract.
 
 import { atom, type ReadableAtom } from "nanostores";
 import { createControlsClient } from "./controls";
@@ -48,16 +47,14 @@ export type HookEntry = {
 export type { ShellEntry, ShellSource } from "./shell";
 export type { TaskEntry, TaskStatus, TaskUsage } from "./tasks";
 
-// hookEvents is plain FIFO drop-oldest — long-running sessions with chatty
-// hooks accumulate thousands of entries otherwise.
+// Long-running sessions with chatty hooks would otherwise accumulate
+// thousands of entries
 const HOOK_EVENTS_CAP = 200;
 
 function capRingFifo<T>(arr: T[], cap: number): T[] {
   return arr.length > cap ? arr.slice(arr.length - cap) : arr;
 }
 
-// session_state_changed: tracks whether claude is mid-turn or idle. Useful
-// for UI affordances (show / hide spinner; prevent send while busy).
 export type SessionState = "idle" | "running" | "requires_action" | "unknown";
 
 export type InitData = {
@@ -107,9 +104,7 @@ export type CcSessionOptions = {
   onCanUseTool?: OnCanUseTool;
   onTrace?: (dir: "in" | "out", line: string) => void;
   persistence?: CcPersistenceOptions | false;
-  // Test seam: inject a pre-built WS client (e.g. an in-memory fake) instead
-  // of constructing one from `url`. The injected client must satisfy the
-  // same WsClient contract.
+  // Test seam — injected client must satisfy the WsClient contract
   wsClient?: WsClient;
 };
 
@@ -130,9 +125,7 @@ export type CcSession = {
   newSession: () => Promise<void>;
   continueSession: () => Promise<void>;
   resumeSession: (sessionId: string) => Promise<void>;
-  // Stop a single task by id (any type — bash, agent, teammate). Maps to
-  // the stop_task control_request. Use over interrupt() when you want to
-  // kill a specific bg task without ending the whole turn.
+  // Use over interrupt() to kill one bg task without ending the whole turn
   stopTask: (taskId: string) => Promise<void>;
   respondToPermission: (id: string, decision: PermissionDecision) => void;
   fetchFileSuggestions: (query: string) => Promise<Array<{ path: string; score?: number }>>;
@@ -147,27 +140,22 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
   const messagesCtrl = createMessagesController();
   const permissions = createPermissionsController({ ws, onCanUseTool: opts.onCanUseTool });
   const tasksCtrl = createTasksController();
-  // Shell controller takes a thunk for sendMessage because both the
-  // controller and sendMessage live inside this factory; the thunk lets
-  // the controller's queued follow-up text fire sendMessage() after the
-  // bash exchange XML lands in the buffer.
+  // Thunk because sendMessage is defined later in this factory; the
+  // controller's queued follow-up needs to fire sendMessage() after the
+  // bash exchange XML lands in the buffer
   const shellCtrl = createShellController({
     ws,
     sendMessage: (text: string) => sendMessage(text),
   });
 
   // ---- persistence ----
-  // We hydrate from storage BEFORE constructing initial state so saved
-  // values feed the atoms' initial values rather than overwriting them
-  // after subscribers have already rendered.
+  // Hydrate BEFORE constructing initial atom state so saved values feed
+  // the initial values, not overwrite them post-render
   const persistence = resolvePersistence(opts.persistence);
   const persisted = persistence ? loadPersisted(persistence) : null;
 
-  // Spawn args, kept up-to-date as the user changes mode/model/effort. Used
-  // when respawning (effort change, session lifecycle change) so the new
-  // child inherits the user's selections. If persistence has a stored
-  // sessionId, the initial mode becomes resume(stored) — this is the
-  // post-refresh path that brings the user back to their last thread.
+  // Persisted sessionId routes the initial spawn through resume(stored) —
+  // this is the post-refresh path back to the user's last thread
   const initialMode: SessionMode = opts.args?.mode
     ?? (persisted?.sessionId ? { kind: "resume", sessionId: persisted.sessionId } : { kind: "continue" });
   let currentArgs: NonNullable<CcSessionOptions["args"]> = {
@@ -203,9 +191,7 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
   const tasks = tasksCtrl.tasks;
   const sessionState = atom<SessionState>("unknown");
 
-  // Hydrate the message timeline from persisted snapshot if any. Doing
-  // this BEFORE wiring the atom listener avoids a feedback loop where
-  // hydration triggers a save (it's idempotent but wasteful).
+  // BEFORE installPersistenceWriter so hydration doesn't kick a save
   if (persisted?.messages && Array.isArray(persisted.messages)) {
     messagesCtrl.hydrate(persisted.messages);
   }
@@ -221,8 +207,8 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
     });
   }
 
-  // Transient errors auto-clear after 5s. Each pending update cancels the
-  // previous timer so back-to-back failures don't get prematurely cleared.
+  // Each new message cancels the previous timer so back-to-back failures
+  // don't get prematurely cleared
   function makeAutoClear(target: { set: (v: string | null) => void }, ttlMs = 5000) {
     let timer: ReturnType<typeof setTimeout> | null = null;
     return (msg: string | null) => {
@@ -239,13 +225,12 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
   let initSeen = false;
 
   ws.onFrame((frame) => {
-    // _local respawn ack — no `type` field, check first.
+    // _local frames have no `type`, so check before any type-based dispatch
     if (handleLocalFrame(frame)) return;
 
-    // Branch on system vs non-system once. The hot path (stream_event /
-    // assistant at token rate) is non-system; this skips the per-handler
-    // isSystemFrame re-checks that previously walked ~5 system handlers
-    // before reaching messagesCtrl.ingest.
+    // Branch system vs non-system once: the hot path (stream_event /
+    // assistant at token rate) is non-system, so this avoids walking
+    // ~5 system handlers before reaching messagesCtrl.ingest
     if (isSystemFrame(frame)) {
       switch (frame.subtype) {
         case "init":
@@ -269,26 +254,19 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
           if (handleSessionStateChanged(frame)) return;
           break;
       }
-      // Unknown / unmatched system subtypes (and handlers that returned
-      // false to opt out, e.g. duplicate init): append to timeline.
+      // Unknown / opted-out system subtypes still land on the timeline
       messagesCtrl.pushFrame(frame);
       return;
     }
 
-    // Non-system path.
     if (controls.ingest(frame)) return;
     if (permissions.ingest(frame)) return;
-    // user/isReplay shell echo. Side-effect-only: builds bash XML for the
-    // next-send buffer, falls through so the frame still lands as a user
-    // bubble.
     shellCtrl.handleShellReplay(frame);
-    // Sub-agent frames (parent_tool_use_id set) MUST run BEFORE
-    // messagesCtrl — the messages controller eats stream_event / assistant
-    // unconditionally, which would otherwise pollute the main timeline
-    // with sub-agent bubbles and starve the per-task transcript.
+    // MUST run before messagesCtrl — messages eats stream_event/assistant
+    // unconditionally and would pollute the main timeline with sub-agent
+    // bubbles, starving the per-task transcript
     if (tasksCtrl.handleSubAgentFrame(frame)) return;
     if (messagesCtrl.ingest(frame)) return;
-    // Drop noisy frames; otherwise append.
     if ("type" in frame && frame.type === "rate_limit_event") return;
     messagesCtrl.pushFrame(frame);
   });
@@ -354,7 +332,7 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
           currentArgs.effort = found as Effort;
         }
       })
-      .catch(() => { /* silent */ });
+      .catch(() => {});
     messagesCtrl.pushFrame(frame);
     return true;
   }
@@ -395,16 +373,13 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
       effort: currentArgs.effort,
       model: currentArgs.model,
     });
-    // Reset BEFORE the wire send so the new claude's system:init is
-    // accepted no matter whether respawnResult or system:init lands first.
-    // (Prior bug: setEffort relied on respawnResult to clear initSeen, but
-    // the bridge spawns the new child synchronously, so its first stdout
-    // line could beat the local respawnResult on the wire.)
+    // Reset before the wire send: the bridge spawns the new child
+    // synchronously, so the new system:init can beat the local
+    // respawnResult on the wire (prior bug: setEffort relied on
+    // respawnResult to clear this)
     initSeen = false;
-    // Cancel any control_request promises that were in flight against the
-    // about-to-die child. The bridge kills the old child the moment it
-    // receives _local:respawn; outstanding requests would otherwise hang
-    // until their timeouts fire against a dead pipe.
+    // Bridge kills the old child the instant it receives _local:respawn;
+    // outstanding controls would otherwise hang against a dead pipe
     controls.abortAll("respawn");
     permissions.clearQueue();
     return new Promise<void>((resolve, reject) => {
@@ -422,10 +397,9 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
 
   function connect() {
     ws.connect();
-    // nanostores subscribe() fires synchronously with the current value
-    // BEFORE returning the unsubscribe — using `const off = subscribe(...)`
-    // and referencing `off` inside the callback TDZ-throws if status is
-    // already "open" at subscribe time. `let` + null-guard handles it.
+    // nanostores subscribe fires synchronously with the current value
+    // before returning the unsubscribe; `let` + null-guard avoids the
+    // TDZ throw if status is already "open" at subscribe time
     let offStatus: (() => void) | null = null;
     let fired = false;
     offStatus = ws.status.subscribe((s) => {
@@ -438,13 +412,10 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
   }
 
   function disconnect() {
-    // Reject in-flight controls and clear the permission queue before
-    // closing the socket so consumers don't see UI buttons hang for
-    // 30 seconds against a torn-down connection.
+    // Reject before close so UI buttons don't hang 30s on a torn-down conn
     controls.abortAll("disconnected");
     permissions.clearQueue();
-    // Reject any pending respawn, too — a respawn issued just before
-    // disconnect would otherwise sit until its 60s timeout.
+    // A respawn issued just before disconnect would otherwise sit 60s
     for (const [id, r] of pendingRespawns) {
       clearTimeout(r.timeoutId);
       r.reject("disconnected");
@@ -487,12 +458,11 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
     } catch (err) {
       pendingMode.set(null);
       const msg = String(err);
-      // Auto-skip: if the failed mode is in the cycle, jump to the next
-      // cycle slot so cycling doesn't get stuck on a forbidden mode.
+      // Skip a forbidden mode in the cycle so cycling doesn't get stuck
       if (CYCLE_ORDER.includes(next)) {
         const skip = nextCycleMode(next);
         setModeErr(`${next} not allowed (${msg}) — skipping to ${skip}`);
-        // Defer one tick so atom subscribers commit pendingMode=null first.
+        // Defer so atom subscribers commit pendingMode=null first
         setTimeout(() => { void setPermissionMode(skip); }, 0);
       } else {
         setModeErr(`could not change to ${next}: ${msg}`);
@@ -543,17 +513,15 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
   async function changeSession(mode: SessionMode, opts: { resetTimeline: boolean }) {
     currentArgs.mode = mode;
     if (opts.resetTimeline) {
-      // Switching to a different conversation thread — wipe local state so
-      // stale bubbles from the previous session don't bleed into the new one.
+      // Different thread; previous-session bubbles must not bleed in
       messagesCtrl.reset();
       hookEvents.set([]);
       shellCtrl.reset();
       tasksCtrl.reset();
-      // Clear init too, otherwise the OLD sessionId / cwd / agents stay
-      // visible in the UI until the new system:init lands (the wire round-
-      // trip can be tens of ms but the visual flicker is jarring). Effort/
-      // model respawns intentionally don't clear init — the same session
-      // is preserved by --continue and gets the same sessionId back.
+      // Otherwise old sessionId/cwd/agents stay visible until the new
+      // system:init lands (jarring tens-of-ms flicker). Effort/model
+      // respawns intentionally don't clear init — --continue preserves
+      // the session and reuses the same sessionId
       init.set({
         sessionId: null,
         model: null,
@@ -562,31 +530,25 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
         slashCommands: [],
         skills: [],
       });
-      // Also clear the persisted snapshot so a refresh after New/Resume
-      // doesn't fall back to the previous session's saved sessionId. The
-      // post-respawn system:init will write the new id back in.
+      // Otherwise a refresh after New/Resume falls back to the previous
+      // session's saved sessionId; post-respawn system:init writes the
+      // new id back in
       if (persistence) {
         try { persistence.storage.removeItem(persistence.key); } catch {}
       }
     }
-    // respawn() resets initSeen + aborts in-flight controls/permissions.
     await respawn();
   }
 
-  // newSession = brand-new conversation, wipe.
   async function newSession() {
     await changeSession({ kind: "new" }, { resetTimeline: true });
   }
-  // continueSession = pick up the most recent thread. Don't wipe local
-  // state: the CLI's --continue restores claude's internal context but
-  // does NOT restream prior turns over stream-json, so wiping would leave
-  // a permanently empty timeline. Calling continue when you're already on
-  // the current session means "stay here," and the user's bubbles stay.
+  // --continue restores claude's internal context but does NOT restream
+  // prior turns, so wiping would leave a permanently empty timeline.
+  // Calling continue on the current session means "stay here"
   async function continueSession() {
     await changeSession({ kind: "continue" }, { resetTimeline: false });
   }
-  // resumeSession = jump to a specific session by id; almost always means
-  // a different thread.
   async function resumeSession(sessionId: string) {
     await changeSession({ kind: "resume", sessionId }, { resetTimeline: true });
   }
@@ -611,7 +573,7 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
   }
 
   async function stopTask(taskId: string) {
-    // stop_task is decorative for local_agent — only interrupt halts it.
+    // For local_agent stop_task is a no-op; only interrupt actually halts it
     const task = tasks.get().find((t) => t.taskId === taskId);
     if (task?.taskType === "local_agent") return interrupt();
     await controls.request({ subtype: "stop_task", task_id: taskId }, { timeoutMs: 10_000 });

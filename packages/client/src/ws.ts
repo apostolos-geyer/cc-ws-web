@@ -1,6 +1,5 @@
-// Thin WS wrapper. Does NOT auto-reconnect (deferred per LIB-DESIGN). One
-// connection per createCcSession. NDJSON framing on the wire — every send is
-// already a single JSON object; the bridge splits inbound on `\n`.
+// Does NOT auto-reconnect (deferred per LIB-DESIGN). NDJSON on the wire:
+// each send is a single JSON object; bridge splits inbound on `\n`.
 
 import { atom, type WritableAtom } from "nanostores";
 import type { InboundFrame, OutboundFrame } from "./protocol";
@@ -19,9 +18,7 @@ export type WsClient = {
   connect: () => void;
   disconnect: () => void;
   send: (frame: OutboundFrame) => void;
-  // Internal: subscribers register here to receive parsed inbound frames.
-  // Avoids forcing a fan-out atom that would re-render every subscriber on
-  // every frame.
+  // Direct fan-out instead of atom — avoids re-rendering every subscriber per frame
   onFrame: (handler: (frame: InboundFrame) => void) => () => void;
 };
 
@@ -58,14 +55,14 @@ export function createWsClient(opts: {
       try {
         parsed = JSON.parse(text);
       } catch {
-        // Bad frame — drop. We don't want one bad frame to take down the session.
+        // One bad frame must not take down the session
         return;
       }
       for (const h of handlers) {
         try {
           h(parsed);
         } catch (err) {
-          // A handler throwing should not stop other handlers.
+          // One handler throwing must not stop the others
           console.error("[ws] handler error", err);
         }
       }

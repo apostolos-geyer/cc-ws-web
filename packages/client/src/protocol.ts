@@ -1,15 +1,10 @@
-// Wire protocol — every JSON shape exchanged between the browser and the
-// bridge. Two channels share the same WS:
-//   1. Claude Code stream-json frames (forwarded verbatim to/from the child).
-//   2. _local frames (intercepted by the bridge, never reach the child).
-//
-// Field sets are pulled from the binary's own runtime Zod schemas. Run
-// `bun packages/client/scripts/extract-claude-schemas.ts extract` against
-// the active `claude` binary to reproduce — see scripts/README.md for the
-// runbook + drift-detection workflow. Variants we don't actively consume
-// still ride the same discriminated union so consumers can narrow
-// without `as any` escape hatches. Unknown system subtypes fall through
-// to UnknownSystemFrame. Pinned to v2.1.129 (2026-05-05).
+// Field sets pulled from the binary's runtime Zod schemas via
+// scripts/extract-claude-schemas.ts (see scripts/README.md). Pinned to
+// v2.1.129 (2026-05-05). Unknown system subtypes fall through to
+// UnknownSystemFrame so unmodelled variants don't break narrowing.
+// Two channels share the WS: Claude Code stream-json frames forwarded
+// verbatim to/from the child, and `_local` frames intercepted by the
+// bridge.
 
 // ---------- shared ----------
 
@@ -184,8 +179,7 @@ export type SystemTaskNotification = {
   session_id?: string;
 };
 
-// task_updated.patch is a wire-safe subset of TaskState fields that changed.
-// Mergeable into the local task map. Excludes abortController/messages/result.
+// Wire-safe subset of TaskState; excludes abortController/messages/result
 export type TaskUpdatedPatch = {
   status?: "running" | "completed" | "failed" | "killed" | "stopped" | string;
   description?: string;
@@ -258,10 +252,8 @@ export type SystemFrame =
   | SystemLocalCommandOutput
   | SystemCompactBoundary;
 
-// Catch-all for system subtypes the binary may emit but the lib doesn't
-// model. Sits OUTSIDE SystemFrame so narrowing on a known subtype yields
-// a single specific variant; consumers that need the broad case (e.g.
-// renderers showing every system frame) accept SystemFrame | UnknownSystemFrame.
+// Outside SystemFrame so narrowing on a known subtype yields a single
+// specific variant; broad consumers accept SystemFrame | UnknownSystemFrame
 export type UnknownSystemFrame = {
   type: "system";
   subtype: string;
@@ -341,8 +333,6 @@ export type CanUseToolControlRequest = {
   permission_suggestions?: unknown[];
 };
 
-// Other inbound control_request subtypes the lib may receive but doesn't
-// drive UI off of. We accept them with subtype + an opaque payload.
 export type UnknownControlRequest = {
   subtype: string;
 };
@@ -372,8 +362,7 @@ export type ControlResponseError = {
 export type ControlResponseFrame = {
   type: "control_response";
   response: ControlResponseSuccess | ControlResponseError;
-  // Some bridge variants put request_id at the outer level. Keep optional
-  // for forward compatibility; consumers should prefer response.request_id.
+  // Some bridges put request_id outside; prefer response.request_id
   request_id?: string;
 };
 
@@ -412,7 +401,6 @@ export type BashCommandFrame = {
   command: string;
 };
 
-// Outbound control_request subtypes we use. Nested envelope.
 export type OutboundControlRequestSubtype =
   | { subtype: "interrupt" }
   | { subtype: "set_permission_mode"; mode: string }
@@ -429,7 +417,6 @@ export type OutboundControlRequestFrame = {
   request: OutboundControlRequestSubtype;
 };
 
-// Reply to a can_use_tool control_request. Nested envelope.
 export type CanUseToolResponseFrame = {
   type: "control_response";
   response: {
@@ -460,10 +447,8 @@ export function makeRequestId(): string {
   return crypto.randomUUID();
 }
 
-// Translate a SessionMode + extras into the CLI flag list for the spawn
-// (consumed by the bridge via _local:respawn). Effort and model are spawn-
-// time only at present (no set_effort control_request exists; --model picks
-// the launch model and set_model can change it later).
+// Effort is spawn-time only (no set_effort control_request); --model
+// picks the launch model and set_model can change it later
 export function buildSpawnArgs(opts: {
   mode: SessionMode;
   effort?: string;
@@ -484,8 +469,6 @@ export function buildSpawnArgs(opts: {
   if (opts.model) args.push("--model", opts.model);
   return args;
 }
-
-// Discriminator helpers — narrow once, reuse the type guard.
 
 export function isSystemFrame(f: InboundFrame): f is SystemFrame | UnknownSystemFrame {
   return (f as { type?: unknown }).type === "system";
@@ -519,7 +502,6 @@ export function isLocalRespawnResult(f: InboundFrame): f is LocalRespawnResultFr
   return (f as { _local?: unknown })._local === "respawnResult";
 }
 
-// Backwards-compat: existing call sites expect this name.
 export type CanUseToolRequest = ControlRequestFrame & {
   request: CanUseToolControlRequest;
 };

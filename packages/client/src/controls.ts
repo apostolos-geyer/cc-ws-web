@@ -1,8 +1,3 @@
-// Control-request layer. Tracks every outbound control_request by request_id
-// and resolves a Promise when its matching control_response arrives. Higher
-// layers (session.ts) compose this for set_permission_mode / set_model /
-// get_settings / file_suggestions / interrupt / end_session.
-
 import {
   isControlResponse,
   makeRequestId,
@@ -11,9 +6,7 @@ import {
 } from "./protocol";
 import type { WsClient } from "./ws";
 
-// The wrapper carries the canonical control_response payload (we hand
-// both back so callers that need the request_id or subtype can dig in;
-// most just read .inner).
+// Callers that need request_id/subtype use .wrapper; most just read .inner
 export type ControlResponseResult = {
   inner: unknown;
   wrapper: { subtype: "success"; request_id: string; response?: unknown };
@@ -30,14 +23,9 @@ export type ControlsClient = {
     request: OutboundControlRequestSubtype,
     opts?: { timeoutMs?: number },
   ) => Promise<ControlResponseResult>;
-  // For frames we DIDN'T initiate (can_use_tool comes IN as control_request).
-  // Returns true if the frame was handled (we matched it to an in-flight
-  // request).
   ingest: (frame: InboundFrame) => boolean;
-  // Reject every in-flight request with `reason`. Called from session
-  // respawn/disconnect — the bridge kills the old claude child the
-  // moment we send respawn, so any outstanding control_request would
-  // otherwise hang against a dead pipe until its timeoutMs fires.
+  // Bridge kills the claude child on respawn, so in-flight requests would
+  // otherwise hang against a dead pipe until timeoutMs fires
   abortAll: (reason: string) => void;
 };
 
@@ -67,8 +55,7 @@ export function createControlsClient(ws: WsClient): ControlsClient {
 
   function ingest(frame: InboundFrame): boolean {
     if (!isControlResponse(frame)) return false;
-    // Real binary wire format may put request_id either at the outer
-    // envelope OR inside response. Check both before giving up.
+    // Real binary may put request_id on outer envelope OR inside response
     const id = frame.response.request_id ?? frame.request_id;
     if (!id) return false;
     const r = inflight.get(id);

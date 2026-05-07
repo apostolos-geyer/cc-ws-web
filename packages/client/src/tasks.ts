@@ -1,7 +1,5 @@
-// Task lifecycle: system:task_started / task_progress / task_updated /
-// task_notification, plus sub-agent fan-out (frames carrying a non-null
-// parent_tool_use_id are routed to the matching task's transcript instead
-// of the main timeline).
+// Frames carrying a non-null parent_tool_use_id are routed to the
+// matching task's transcript instead of the main timeline.
 
 import { atom, type WritableAtom } from "nanostores";
 import type { MessageEntry } from "./messages";
@@ -15,10 +13,9 @@ import {
   type TaskUsageBlock,
 } from "./protocol";
 
-// task_id is the binary's local registry id and the value to pass to
-// stopTask(). tool_use_id ties the task back to the tool_use block that
-// spawned it (Bash, Agent, Task, etc) — used to render task progress
-// alongside / inside the parent's tool_use card.
+// task_id is the value stopTask() takes; tool_use_id matches the
+// spawning tool_use block (Bash, Agent, Task) so UI can nest progress
+// inside the parent card
 export type TaskStatus = "running" | "completed" | "failed" | "stopped";
 
 export type TaskUsage = {
@@ -41,9 +38,8 @@ export type TaskEntry = {
   summary?: string;
   outputFile?: string;
   usage?: TaskUsage;
-  // Sub-agent transcript (frames received with parent_tool_use_id matching
-  // toolUseId). Populated only for tasks that emit their own frames —
-  // bash tasks won't have these.
+  // Frames whose parent_tool_use_id matches toolUseId; bash tasks
+  // emit none and stay empty
   transcript: MessageEntry[];
 };
 
@@ -51,7 +47,7 @@ const TASKS_CAP = 100;
 
 export function capTasksKeepRunning<T extends { status: string }>(arr: T[], cap: number): T[] {
   if (arr.length <= cap) return arr;
-  // Evict oldest non-running entries first; if all are running, keep all.
+  // Evict oldest non-running first; if all are running, exceed the cap
   const overflow = arr.length - cap;
   const out: T[] = [];
   let evictBudget = overflow;
@@ -81,10 +77,9 @@ export type TasksController = {
   reset: () => void;
 };
 
-// Orphan sub-agent frames (parent_tool_use_id without a matching task yet)
-// are held this long before being dropped. Real binary ordering puts
-// task_started ahead of fan-out frames; anything orphaned past the TTL
-// is a wire-protocol bug worth surfacing in the console.
+// Real binary ordering puts task_started ahead of fan-out frames,
+// so anything still orphaned past the TTL is a wire-protocol bug
+// worth surfacing in the console
 const ORPHAN_TTL_MS = 5000;
 
 type PendingFrame = { frame: InboundFrame; addedAt: number };
@@ -145,8 +140,6 @@ export function createTasksController(): TasksController {
     }
   }
 
-  // task_started bookend opens a task; progress updates the running entry;
-  // task_notification closes it with terminal status.
   function handleTaskEvent(frame: InboundFrame): boolean {
     if (!isSystemFrame(frame)) return false;
 
@@ -197,9 +190,9 @@ export function createTasksController(): TasksController {
       return true;
     }
 
-    // task_updated is the binary's immediate state-change frame (stop_task
-    // → status:"killed"). The bookend task_notification arrives later;
-    // flip status NOW so a killed task doesn't render as still-running.
+    // task_updated lands immediately on stop_task; the closing
+    // task_notification arrives later, so we must flip status now
+    // to avoid rendering a killed task as still-running
     if (frame.subtype === "task_updated") {
       const f = frame as SystemTaskUpdated;
       if (!f.task_id || !f.patch) return false;
@@ -248,13 +241,11 @@ export function createTasksController(): TasksController {
     return false;
   }
 
-  // Sub-agent frames must be checked BEFORE messagesCtrl.ingest in the
-  // dispatch chain — the messages controller eats stream_event / assistant
-  // unconditionally, which would otherwise pollute the main timeline with
-  // sub-agent bubbles and starve the per-task transcript. The lib owns the
-  // contract: any frame with parent_tool_use_id is consumed here (returned
-  // true) — either appended to the matching task's transcript, or buffered
-  // until task_started arrives, or dropped after ORPHAN_TTL_MS.
+  // MUST run before messagesCtrl.ingest in the dispatch chain — messages
+  // eats stream_event/assistant unconditionally and would pollute the
+  // main timeline with sub-agent bubbles. Returning true claims the
+  // frame: appended to the task transcript, buffered until task_started
+  // arrives, or dropped after ORPHAN_TTL_MS.
   function handleSubAgentFrame(frame: InboundFrame): boolean {
     const parent =
       "parent_tool_use_id" in frame && typeof frame.parent_tool_use_id === "string"
@@ -266,7 +257,7 @@ export function createTasksController(): TasksController {
     const arr = tasks.get();
     const idx = arr.findIndex((t) => t.toolUseId === parent);
     if (idx === -1) {
-      // Race: task_started not yet observed. Buffer until it lands.
+      // task_started not yet observed; buffer until it lands
       const buf = pendingByParent.get(parent) ?? [];
       buf.push({ frame, addedAt: now });
       pendingByParent.set(parent, buf);

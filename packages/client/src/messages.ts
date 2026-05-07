@@ -1,12 +1,6 @@
-// Conversation log. Holds:
-//   - Local user echoes (sent prompts mirrored into the chat).
-//   - Raw inbound frames (assistant, user, result, control_*, etc).
-//   - In-flight assistant messages reconstructed from `stream_event` deltas.
-//
-// The `messages` atom is the canonical timeline. Streaming messages live as
-// entries with kind:"streaming"; when the canonical `assistant` envelope
-// arrives, the streaming entry is removed and replaced by the final
-// `frame` entry (the renderer treats the assistant frame as authoritative).
+// Streaming entries (rebuilt from stream_event deltas) are replaced by
+// the canonical `frame` entry once the `assistant` envelope arrives —
+// the envelope is authoritative.
 
 import { atom, type WritableAtom } from "nanostores";
 import type { InboundFrame, StreamEvent } from "./protocol";
@@ -19,10 +13,8 @@ export type ToolUseBlock = {
   id: string;
   name: string;
   input: unknown;
-  // partial_json deltas accumulate here, parsed into `input` on
-  // content_block_stop. `parsed` flips true once parsed (or on empty input
-  // close). Renderers read both to show streaming tool inputs before the
-  // JSON is closed.
+  // Renderers read partialJson before content_block_stop to show
+  // streaming tool inputs while the JSON is still open
   partialJson: string;
   parsed: boolean;
 };
@@ -66,21 +58,16 @@ export type MessageEntry = LocalUserEntry | FrameEntry | StreamingEntry;
 export type MessagesController = {
   messages: WritableAtom<MessageEntry[]>;
   activeStreamId: WritableAtom<string | null>;
-  // Bumps on every non-streaming change (pushFrame / pushLocalUser /
-  // dropStreaming / reset / hydrate). Stays still during streaming
-  // deltas. Persistence and other "save on stable change" consumers
-  // should subscribe to this rather than `messages` to avoid paying
-  // a serialization tax once per 250ms while a turn is streaming.
+  // Bumps on non-streaming changes only; subscribe to this (not
+  // `messages`) for save-on-stable-change to skip the per-token churn
   revision: WritableAtom<number>;
   pushLocalUser: (text: string) => void;
   pushFrame: (frame: InboundFrame) => void;
-  // Returns true if the frame was consumed by the streaming machinery and
-  // should NOT be appended to the timeline as a frame entry.
+  // Returns true when the streaming machinery consumed the frame; the
+  // caller MUST NOT also append it as a frame entry
   ingest: (frame: InboundFrame) => boolean;
   reset: () => void;
-  // Replace the timeline with a saved snapshot (used by persistence on
-  // reload). Streaming entries are dropped — they're transient and don't
-  // round-trip through serialization.
+  // Streaming entries are dropped — they don't round-trip through serialization
   hydrate: (entries: MessageEntry[]) => void;
 };
 
@@ -91,11 +78,9 @@ export function createMessagesController(): MessagesController {
   function bumpRevision() {
     revision.set(revision.get() + 1);
   }
-  // Streaming reconstructions, keyed by message id. Mutated in place; each
-  // delta bumps the messages atom by emitting a new array reference so
-  // subscribers re-render. We accept the array-replacement cost for the
-  // simpler reactivity contract — there's typically ≤1 active streaming
-  // message at a time.
+  // Mutated in place — there's typically ≤1 active streaming message,
+  // so the array-replace-per-delta cost beats a more complex reactivity
+  // contract
   const streaming = new Map<string, InFlightMessage>();
   let arrivalCounter = 0;
 
@@ -139,10 +124,9 @@ export function createMessagesController(): MessagesController {
   }
 
   function bumpStreaming(id: string) {
-    // Per-token rebump. Replace just the streaming entry's identity so
-    // subscribers re-render — the streaming entry always lives at the
-    // tail (we never push frames after a stream starts until message_stop)
-    // so we can mutate the array in place rather than scan with .map.
+    // The streaming entry lives at the tail until message_stop (no
+    // frames are pushed during a stream), so we can mutate the array
+    // in place rather than scan with .map
     const msg = streaming.get(id);
     if (!msg) return;
     const arr = messages.get();
@@ -261,13 +245,10 @@ export function createMessagesController(): MessagesController {
 
   function ingest(frame: InboundFrame): boolean {
     if (!("type" in frame)) return false;
-    // Streaming deltas: consume and never append the raw frame.
     if (frame.type === "stream_event" && frame.event) {
       applyStreamEvent(frame.event);
       return true;
     }
-    // Canonical assistant envelope: drop any matching streaming reconstruction
-    // (the envelope is authoritative), then append the frame.
     if (frame.type === "assistant" && frame.message?.id) {
       const id = frame.message.id;
       if (streaming.has(id)) dropStreaming(id);
@@ -283,8 +264,8 @@ export function createMessagesController(): MessagesController {
     const filtered = entries.filter(
       (e): e is LocalUserEntry | FrameEntry => e.kind === "frame" || e.kind === "local_user",
     );
-    // Reseat arrivalCounter past the last hydrated entry so subsequent
-    // pushes don't collide with restored ids in render order.
+    // Reseat past the last hydrated entry so subsequent pushes don't
+    // collide with restored ids in render order
     arrivalCounter = filtered.length > 0
       ? Math.max(...filtered.map((e) => e.arrivalIdx)) + 1
       : 0;
