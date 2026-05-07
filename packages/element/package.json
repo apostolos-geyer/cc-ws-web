@@ -1,0 +1,33 @@
+{
+  "name": "@somewhatintelligent/cc-ws-element",
+  "version": "0.1.3",
+  "description": "Drop-in <cc-ws-chat> custom element — embeddable Claude Code chat UI backed by a cc-ws WebSocket bridge.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/cc-ws-chat.js",
+  "types": "./dist/cc-ws-chat.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/cc-ws-chat.d.ts",
+      "default": "./dist/cc-ws-chat.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vite build"
+  },
+  "sideEffects": true,
+  "devDependencies": {
+    "@somewhatintelligent/cc-ws-svelte": "workspace:*",
+    "@sveltejs/vite-plugin-svelte": "^7.1.1",
+    "nanostores": "^1.3.0",
+    "svelte": "^5.55.5",
+    "vite": "^8.0.10"
+  }
+}

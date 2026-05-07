@@ -1,8 +1,8 @@
 // apps/web — reference implementation host. Owns its own Bun.serve so it
-// can serve HTML + bundled JS, and mounts the @cc-ws/server bridge at /ws.
+// can serve HTML + bundled JS, and mounts the @somewhatintelligent/cc-ws-server bridge at /ws.
 // The bridge is just the WebSocket; this file is the HTTP layer.
 
-import { websocket, createWsData, type WsData } from "@cc-ws/server";
+import { websocket, createWsData, type WsData } from "@somewhatintelligent/cc-ws-server";
 
 const PORT = Number(Bun.env.PORT ?? 3000);
 const APP_DIR = import.meta.dir + "/..";       // apps/web/

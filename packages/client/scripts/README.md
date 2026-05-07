@@ -1,6 +1,6 @@
 # Claude Code schema extraction
 
-`@cc-ws/client`'s [`protocol.ts`](../src/protocol.ts) is a typed mirror of
+`@somewhatintelligent/cc-ws-client`'s [`protocol.ts`](../src/protocol.ts) is a typed mirror of
 the wire protocol the Claude Code binary speaks over `--input-format
 stream-json --output-format stream-json`. Anthropic doesn't publish that
 protocol's spec — but every Zod schema the binary uses to validate it is

@@ -4,7 +4,7 @@ import { defineConfig } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 
 // Library-mode build that emits a single drop-in IIFE at
-// dist-embed/cc-ws-chat.js. Run with: bun run build:embed.
+// dist/cc-ws-chat.js. Run with: bun run build.
 //
 // Why one file: the svelte plugin's `compilerOptions.customElement: true`
 // switches every component referenced from the embed entry to inline its
@@ -27,13 +27,13 @@ export default defineConfig({
         const root = import.meta.dirname;
         copyFileSync(
           resolve(root, "src/embed/cc-ws-chat.d.ts"),
-          resolve(root, "dist-embed/cc-ws-chat.d.ts"),
+          resolve(root, "dist/cc-ws-chat.d.ts"),
         );
       },
     },
   ],
   build: {
-    outDir: "dist-embed",
+    outDir: "dist",
     emptyOutDir: true,
     cssCodeSplit: false,
     sourcemap: true,

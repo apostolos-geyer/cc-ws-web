@@ -1,5 +1,5 @@
 {
-  "name": "@cc-ws/web-react",
+  "name": "@somewhatintelligent/cc-ws-web-react",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,9 +8,9 @@
     "start": "bun src/server.ts"
   },
   "dependencies": {
-    "@cc-ws/client": "workspace:*",
-    "@cc-ws/react": "workspace:*",
-    "@cc-ws/server": "workspace:*",
+    "@somewhatintelligent/cc-ws-client": "workspace:*",
+    "@somewhatintelligent/cc-ws-react": "workspace:*",
+    "@somewhatintelligent/cc-ws-server": "workspace:*",
     "@nanostores/react": "^1.1.0",
     "nanostores": "^1.3.0",
     "react": "^19.0.0",

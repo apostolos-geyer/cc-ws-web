@@ -1,6 +1,6 @@
 {
-  "name": "@cc-ws/svelte",
-  "version": "0.1.0",
+  "name": "@somewhatintelligent/cc-ws-svelte",
+  "version": "0.1.3",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -14,7 +14,7 @@
   },
   "svelte": "./src/index.ts",
   "dependencies": {
-    "@cc-ws/client": "workspace:*",
+    "@somewhatintelligent/cc-ws-client": "workspace:*",
     "nanostores": "^1.3.0"
   },
   "peerDependencies": {

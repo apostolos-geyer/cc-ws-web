@@ -19,7 +19,6 @@
     "src/**/*.svelte",
     "src/**/*.svelte.ts",
     "vite.config.ts",
-    "vite.config.embed.ts",
     "svelte.config.js"
   ]
 }

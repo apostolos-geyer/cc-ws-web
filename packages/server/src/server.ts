@@ -1,5 +1,6 @@
-// @cc-ws/server — Bun-based WebSocket server fronting a Claude Code child
-// per connection. Speaks the wire protocol documented in @cc-ws/client. The
+#!/usr/bin/env bun
+// @somewhatintelligent/cc-ws-server — Bun-based WebSocket server fronting a Claude Code child
+// per connection. Speaks the wire protocol documented in @somewhatintelligent/cc-ws-client. The
 // server is independently runnable (see bin/start.ts) and embeddable —
 // startServer() owns Bun.serve and mounts /ws; an optional staticDir lets
 // the same Bun.serve also serve a UI (apps/web uses this).
@@ -154,7 +155,7 @@ export const websocket = {
 //      surface beyond the upgrade endpoint.
 //
 //   2. Embedded in your own Bun.serve:
-//        import { websocket, createWsData } from "@cc-ws/server";
+//        import { websocket, createWsData } from "@somewhatintelligent/cc-ws-server";
 //        Bun.serve<WsData>({
 //          fetch(req, srv) {
 //            if (new URL(req.url).pathname === "/ws") {

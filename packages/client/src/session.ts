@@ -1,5 +1,3 @@
-// See LIB-DESIGN.md for the full API contract.
-
 import { atom, type ReadableAtom } from "nanostores";
 import { createControlsClient } from "./controls";
 import { createMessagesController, type MessageEntry } from "./messages";

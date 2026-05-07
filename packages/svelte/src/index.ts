@@ -1,4 +1,4 @@
-// Svelte 5 adapter for @cc-ws/client. Thin by design — nanostores atoms
+// Svelte 5 adapter for @somewhatintelligent/cc-ws-client. Thin by design — nanostores atoms
 // already implement Svelte's store contract, so any atom auto-subscribes
 // in templates with the `$` prefix. The adapter only adds typed context
 // injection so consumers don't have to thread the session manually, plus
@@ -7,7 +7,7 @@
 // Pattern in a component:
 //
 //   <script lang="ts">
-//     import { getCcSession } from '@cc-ws/svelte';
+//     import { getCcSession } from '@somewhatintelligent/cc-ws-svelte';
 //     const session = getCcSession();
 //     const { status, messages, tasks } = session.atoms;
 //   </script>
@@ -18,9 +18,9 @@
 // In `.svelte.ts` modules use svelte/store's `fromStore(atom).current`.
 
 import { getContext, setContext } from "svelte";
-import type { CcSession } from "@cc-ws/client";
+import type { CcSession } from "@somewhatintelligent/cc-ws-client";
 
-const KEY = Symbol.for("@cc-ws/svelte:session");
+const KEY = Symbol.for("@somewhatintelligent/cc-ws-svelte:session");
 
 export function setCcSession(session: CcSession): void {
   setContext(KEY, session);
@@ -37,5 +37,5 @@ export function getCcSession(): CcSession {
 }
 
 // Pass-through every public surface the lib exports. Consumers should
-// only need `@cc-ws/svelte` in their imports.
-export * from "@cc-ws/client";
+// only need `@somewhatintelligent/cc-ws-svelte` in their imports.
+export * from "@somewhatintelligent/cc-ws-client";

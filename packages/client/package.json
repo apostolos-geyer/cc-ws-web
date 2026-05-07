@@ -1,7 +1,8 @@
 {
-  "name": "@cc-ws/client",
-  "version": "0.1.0",
-  "private": true,
+  "name": "@somewhatintelligent/cc-ws-client",
+  "version": "0.1.3",
+  "description": "Framework-agnostic reactive WebSocket client for the cc-ws Claude Code bridge protocol.",
+  "license": "MIT",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -9,6 +10,13 @@
     ".": "./src/index.ts",
     "./protocol": "./src/protocol.ts",
     "./modes": "./src/modes.ts"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "nanostores": "^1.3.0"

@@ -1,5 +1,5 @@
-// Does NOT auto-reconnect (deferred per LIB-DESIGN). NDJSON on the wire:
-// each send is a single JSON object; bridge splits inbound on `\n`.
+// Does NOT auto-reconnect. NDJSON on the wire: each send is a single JSON
+// object; bridge splits inbound on `\n`.
 
 import { atom, type WritableAtom } from "nanostores";
 import type { InboundFrame, OutboundFrame } from "./protocol";

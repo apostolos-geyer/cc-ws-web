@@ -1,4 +1,4 @@
-// React adapter for @cc-ws/client. Provides a Provider/hook pair so consumers
+// React adapter for @somewhatintelligent/cc-ws-client. Provides a Provider/hook pair so consumers
 // don't have to thread `session` everywhere, plus convenience hooks that wrap
 // useStore() on the canonical atoms. Anyone who needs a less-common atom can
 // reach for `useCcAtom(session.atoms.X)` directly.
@@ -19,7 +19,7 @@ import type {
   WsStatus,
   Effort,
   PermissionMode,
-} from "@cc-ws/client";
+} from "@somewhatintelligent/cc-ws-client";
 
 // Re-export the typed useStore as useCcAtom — same fn, more discoverable name.
 export const useCcAtom: <T>(atom: ReadableAtom<T> | Atom<T>) => T = useStore;
@@ -127,7 +127,7 @@ export function useSessionState(): SessionState {
   return useStore(useCcSession().atoms.sessionState);
 }
 
-// ---------- re-exports so consumers only need to depend on @cc-ws/react ----------
+// ---------- re-exports so consumers only need to depend on @somewhatintelligent/cc-ws-react ----------
 
 export {
   createCcSession,
@@ -142,7 +142,7 @@ export {
   PERMISSION_MODE_DEFS,
   PERMISSION_MODE_OPTIONS,
   nextCycleMode,
-} from "@cc-ws/client";
+} from "@somewhatintelligent/cc-ws-client";
 export type {
   CcAtoms,
   CcPersistenceOptions,
@@ -174,4 +174,4 @@ export type {
   ThinkingBlock,
   ToolUseBlock,
   WsStatus,
-} from "@cc-ws/client";
+} from "@somewhatintelligent/cc-ws-client";

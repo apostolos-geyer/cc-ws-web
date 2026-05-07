@@ -40,16 +40,4 @@ declare global {
   interface HTMLElementTagNameMap {
     "cc-ws-chat": CcWsChatElement;
   }
-
-  // React JSX consumer support.
-  namespace JSX {
-    interface IntrinsicElements {
-      "cc-ws-chat": Partial<CcWsChatElement> & {
-        "ws-url"?: string;
-        "storage-key"?: string;
-        keybinds?: boolean | "";
-        children?: unknown;
-      };
-    }
-  }
 }

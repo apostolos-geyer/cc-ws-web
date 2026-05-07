@@ -36,7 +36,7 @@ import {
   type StreamingBlock,
   type StreamingEntry,
   type TaskEntry,
-} from "@cc-ws/react";
+} from "@somewhatintelligent/cc-ws-react";
 
 // Single session per page, provided to the tree via CcSessionProvider.
 const session = createCcSession({

@@ -4,5 +4,13 @@ node_modules/
 .DS_Store
 *.log
 bun.lockb
+
+# Build outputs
 dist/
 dist-embed/
+.svelte-kit/
+.vite/
+
+# Local scratch / test artifacts
+.perm-test*.txt
+_dev.log
