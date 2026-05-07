@@ -8,14 +8,23 @@
   html, body, #root { height: 100%; margin: 0; }
   body { font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0f1115; color: #e6e6e6; }
   #root { display: flex; flex-direction: column; }
-  header { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #181b22; border-bottom: 1px solid #262a33; }
-  header .chip { font-size: 12px; color: #9aa0a8; flex: 1; }
+  header { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #181b22; border-bottom: 1px solid #262a33; flex-wrap: wrap; }
+  header .chip { font-size: 12px; color: #9aa0a8; flex: 1; min-width: 200px; }
+  header .chip .session-id { margin-left: 6px; cursor: pointer; color: #b0c5ff; }
+  header .chip .session-id:hover { color: #fff; }
   header .mode-control { display: flex; align-items: center; gap: 8px; }
   header .mode-select { background: #0f1115; color: #e6e6e6; border: 1px solid #262a33; border-radius: 4px; padding: 5px 8px; font: inherit; cursor: pointer; }
   header .mode-select:disabled { opacity: 0.5; cursor: default; }
   header .mode-error { font-size: 11px; color: #ff6b6b; max-width: 280px; }
   header button { background: #b04545; color: #fff; border: 0; border-radius: 4px; padding: 6px 10px; cursor: pointer; }
   header button:disabled { opacity: 0.4; cursor: default; }
+  header .session-control { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  header .session-control button { background: #2c3a52; padding: 5px 10px; font-size: 12px; }
+  header .session-control button.session-end { background: #6b3a3a; }
+  header .session-control input.resume-input { background: #0f1115; color: #e6e6e6; border: 1px solid #262a33; border-radius: 4px; padding: 5px 8px; font: inherit; font-size: 11px; font-family: ui-monospace, monospace; width: 280px; }
+  header .session-control input.resume-input:disabled { opacity: 0.5; }
+  header .session-err { font-size: 11px; color: #ff6b6b; max-width: 240px; }
+  header .session-hint { font-size: 11px; color: #b08a45; }
   main { flex: 1; overflow-y: auto; padding: 12px; }
   .row { margin: 8px 0; }
   .bubble { padding: 8px 10px; border-radius: 8px; max-width: 80%; white-space: pre-wrap; }
@@ -49,6 +58,7 @@
   .shell-source { font-size: 9px; padding: 1px 5px; border-radius: 3px; letter-spacing: 0.04em; text-transform: uppercase; flex-shrink: 0; }
   .shell-source.context { background: #2a4a2a; color: #c0e6c0; }
   .shell-source.sideChannel { background: #3a2e10; color: #e6c890; }
+  .shell-queued { font-size: 9px; padding: 1px 5px; border-radius: 3px; letter-spacing: 0.04em; text-transform: uppercase; flex-shrink: 0; background: #2a3f6b; color: #c8d8ff; }
   .ac-dropdown { position: absolute; bottom: 100%; left: 0; right: 0; margin: 0 0 4px 0; padding: 4px 0; max-height: 240px; overflow-y: auto; background: #14171f; border: 1px solid #2c3242; border-radius: 6px; list-style: none; z-index: 10; box-shadow: 0 4px 14px rgba(0,0,0,0.4); }
   .ac-dropdown li { display: flex; align-items: center; gap: 8px; padding: 4px 10px; cursor: pointer; font-size: 13px; }
   .ac-dropdown li.active { background: #1f2a52; }
@@ -71,6 +81,58 @@
   .md code { background: #0a0c10; padding: 1px 4px; border-radius: 3px; }
   .md pre { background: #0a0c10; padding: 8px; border-radius: 4px; overflow-x: auto; }
   .stream-cursor { display: inline-block; width: 7px; height: 1em; margin-left: 1px; vertical-align: text-bottom; background: #b0c5ff; animation: cc-blink 1s steps(1, end) infinite; }
+  .row.bash-row { margin: 4px 0; display: flex; justify-content: flex-end; }
+  .bash-bubble { font-family: ui-monospace, monospace; font-size: 12px; border-radius: 4px; padding: 6px 10px; max-width: 80%; }
+  .bash-input-bubble { background: #1a1410; border-right: 2px solid #b08a45; color: #e6c890; }
+  .bash-input-bubble .bash-prompt { color: #b08a45; margin-right: 8px; font-weight: 600; }
+  .bash-input-bubble .bash-cmd { color: #e6e6e6; white-space: pre-wrap; word-break: break-all; }
+  .bash-output-bubble { background: #0d100d; border-right: 2px solid #4a8a4a; color: #c0e6c0; }
+  .bash-output-bubble .bash-stdout { margin: 0; white-space: pre-wrap; word-break: break-word; color: #cfd6e3; }
+  .bash-output-bubble .bash-stderr { margin: 4px 0 0; white-space: pre-wrap; word-break: break-word; color: #ffb0b0; }
+  .bash-output-bubble .bash-exit { font-size: 10px; color: #b08a45; margin-top: 4px; display: block; }
+  details.thinking { border-left: 2px solid #6b5ca8; background: #161528; padding: 6px 10px; margin: 6px 0; border-radius: 4px; font-size: 13px; color: #b8b3d8; }
+  details.thinking summary { cursor: pointer; color: #c8b8ff; font-style: italic; user-select: none; }
+  details.thinking summary::marker { color: #6b5ca8; }
+  details.thinking .thinking-icon { color: #c8b8ff; margin-right: 4px; }
+  details.thinking .thinking-status { font-size: 11px; color: #8e84c2; margin-left: 8px; font-style: italic; }
+  details.thinking .thinking-body { margin-top: 6px; white-space: pre-wrap; word-break: break-word; font-style: italic; color: #c0bbe0; line-height: 1.5; max-height: 360px; overflow-y: auto; padding-right: 6px; }
+  .tasks-panel { background: #0a0c10; border-top: 1px solid #262a33; max-height: 260px; overflow-y: auto; font-size: 12px; }
+  .tasks-head { padding: 6px 12px; border-bottom: 1px solid #1f242e; color: #9aa0a8; font-family: ui-monospace, monospace; }
+  .tasks-head .dim { color: #5a606b; }
+  .tasks-body { padding: 4px 12px; }
+  .task-row { margin: 3px 0; border: 1px solid #2c3242; border-radius: 4px; background: #11131a; }
+  .task-row.task-running { border-color: #4a8a4a; }
+  .task-row.task-failed { border-color: #8a4a4a; }
+  .task-row.task-stopped { border-color: #8a7a4a; }
+  .task-head { display: flex; align-items: center; gap: 8px; padding: 4px 8px; cursor: pointer; }
+  .task-head:hover { background: #14171f; }
+  .task-status-dot { width: 7px; height: 7px; border-radius: 50%; background: #4a8a4a; flex-shrink: 0; }
+  .task-row.task-completed .task-status-dot { background: #5a606b; }
+  .task-row.task-failed .task-status-dot { background: #b04545; }
+  .task-row.task-stopped .task-status-dot { background: #b08a45; }
+  .task-row.task-running .task-status-dot { animation: cc-pulse 1.5s ease-in-out infinite; }
+  @keyframes cc-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+  .task-type { color: #b0c5ff; font-weight: 600; flex-shrink: 0; }
+  .task-desc { color: #cfd6e3; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .task-tool { color: #8ea0c4; font-family: ui-monospace, monospace; font-size: 11px; flex-shrink: 0; }
+  .task-elapsed { color: #777f8c; font-size: 11px; flex-shrink: 0; }
+  .task-usage { color: #777f8c; font-size: 11px; flex-shrink: 0; }
+  .task-status-tag { font-size: 10px; padding: 1px 6px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.04em; flex-shrink: 0; background: #2a2a3a; color: #c8d8ff; }
+  .task-status-tag.completed { background: #2a3a2a; color: #c0e6c0; }
+  .task-status-tag.failed { background: #3a2020; color: #ffb0b0; }
+  .task-status-tag.stopped { background: #3a2e10; color: #e6c890; }
+  .task-status-tag.running { background: #1a3a1a; color: #b0e6b0; }
+  .task-stop { background: #6b3a3a; color: #fff; border: 0; padding: 3px 10px; font-size: 11px; border-radius: 3px; cursor: pointer; flex-shrink: 0; }
+  .task-stop:disabled { opacity: 0.5; cursor: default; }
+  .task-transcript-toggle { color: #777f8c; flex-shrink: 0; }
+  .task-transcript { padding: 4px 12px 8px 24px; border-top: 1px solid #1f242e; background: #0d1015; }
+  .task-frame { margin: 3px 0; padding: 3px 0; }
+  .sub-text { color: #cfd6e3; white-space: pre-wrap; }
+  .sub-tool { color: #8ea0c4; font-family: ui-monospace, monospace; font-size: 11px; }
+  .sub-thinking { color: #b8b3d8; font-style: italic; font-size: 11px; }
+  .sub-result { color: #777f8c; font-size: 11px; font-style: italic; }
+  .sub-init { color: #5a606b; font-size: 11px; }
+  .sub-misc { color: #5a606b; font-size: 11px; font-family: ui-monospace, monospace; }
   @keyframes cc-blink { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
   .hooks-panel { background: #0a0c10; border-top: 1px solid #262a33; max-height: 200px; overflow-y: auto; font-family: ui-monospace, monospace; font-size: 12px; }
   .hooks-head { padding: 6px 12px; border-bottom: 1px solid #1f242e; color: #9aa0a8; }

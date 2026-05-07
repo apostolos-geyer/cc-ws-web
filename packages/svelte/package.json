@@ -1,0 +1,26 @@
+{
+  "name": "@cc-ws/svelte",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "svelte": "./src/index.ts",
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "svelte": "./src/index.ts",
+  "dependencies": {
+    "@cc-ws/client": "workspace:*",
+    "nanostores": "^1.3.0"
+  },
+  "peerDependencies": {
+    "svelte": "^5.0.0"
+  },
+  "devDependencies": {
+    "svelte": "^5.0.0"
+  }
+}

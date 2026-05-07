@@ -1,0 +1,105 @@
+:root {
+  --bg: #0d0d0e;
+  --bg-1: #131316;
+  --bg-2: #1a1a1e;
+  --bg-3: #232328;
+  --fg: #e6e6e8;
+  --fg-1: #b4b4ba;
+  --fg-2: #6b6b72;
+  --fg-3: #3f3f44;
+  --border: #1c1c20;
+  --border-1: #2a2a30;
+
+  --accent: #d97757;
+  --accent-soft: rgba(217, 119, 87, 0.14);
+  --accent-line: rgba(217, 119, 87, 0.35);
+
+  --warn: #e0a458;
+  --error: #e15c5c;
+  --ok: #6dd494;
+  --info: #6ba6e0;
+  --thinking: #b08ad9;
+  --teal: #4fb8b0;
+
+  --font-mono: "Iosevka", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-size: 13.5px;
+  --line-height: 1.55;
+  --row-pad-y: 6px;
+  --row-pad-x: 18px;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  font-feature-settings: "calt" 1, "ss01" 1;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+input, textarea {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  resize: none;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-1); }
+
+/* Tiny bullet/glyph helpers used in row gutters. */
+.gutter {
+  display: inline-block;
+  width: 14px;
+  text-align: center;
+  color: var(--fg-3);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.dim { color: var(--fg-2); }
+.dimmer { color: var(--fg-3); }
+.accent { color: var(--accent); }
+
+.kbd {
+  font-family: inherit;
+  font-size: 0.85em;
+  padding: 0 4px;
+  border: 1px solid var(--border-1);
+  border-radius: 3px;
+  color: var(--fg-1);
+  background: var(--bg-1);
+}
