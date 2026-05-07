@@ -81,8 +81,56 @@ export type TasksController = {
   reset: () => void;
 };
 
+// Orphan sub-agent frames (parent_tool_use_id without a matching task yet)
+// are held this long before being dropped. Real binary ordering puts
+// task_started ahead of fan-out frames; anything orphaned past the TTL
+// is a wire-protocol bug worth surfacing in the console.
+const ORPHAN_TTL_MS = 5000;
+
+type PendingFrame = { frame: InboundFrame; addedAt: number };
+
 export function createTasksController(): TasksController {
   const tasks = atom<TaskEntry[]>([]);
+  const pendingByParent = new Map<string, PendingFrame[]>();
+
+  function gcPending(now: number) {
+    for (const [parent, buf] of pendingByParent) {
+      const kept = buf.filter((p) => now - p.addedAt < ORPHAN_TTL_MS);
+      if (kept.length === buf.length) continue;
+      const dropped = buf.length - kept.length;
+      if (dropped > 0) {
+        console.warn("[tasks] orphan sub-agent frame dropped after TTL", parent, dropped);
+      }
+      if (kept.length === 0) {
+        pendingByParent.delete(parent);
+      } else {
+        pendingByParent.set(parent, kept);
+      }
+    }
+  }
+
+  function flushPendingFor(parent: string) {
+    const buf = pendingByParent.get(parent);
+    if (!buf || buf.length === 0) return;
+    pendingByParent.delete(parent);
+    const arr = tasks.get();
+    const idx = arr.findIndex((t) => t.toolUseId === parent);
+    if (idx === -1) return;
+    const next = arr.slice();
+    const cur = arr[idx]!;
+    const appended: MessageEntry[] = buf.map((p, i) => ({
+      kind: "frame" as const,
+      id: crypto.randomUUID(),
+      frame: p.frame,
+      arrivalIdx: cur.transcript.length + i,
+    }));
+    next[idx] = {
+      ...cur,
+      transcript: [...cur.transcript, ...appended],
+      lastUpdate: Date.now(),
+    };
+    tasks.set(next);
+  }
 
   function upsertTask(taskId: string, mut: (t: TaskEntry) => TaskEntry, init?: () => TaskEntry) {
     const arr = tasks.get();
@@ -131,6 +179,7 @@ export function createTasksController(): TasksController {
           transcript: [],
         }),
       );
+      if (f.tool_use_id) flushPendingFor(f.tool_use_id);
       return true;
     }
 
@@ -202,18 +251,27 @@ export function createTasksController(): TasksController {
   // Sub-agent frames must be checked BEFORE messagesCtrl.ingest in the
   // dispatch chain — the messages controller eats stream_event / assistant
   // unconditionally, which would otherwise pollute the main timeline with
-  // sub-agent bubbles and starve the per-task transcript.
+  // sub-agent bubbles and starve the per-task transcript. The lib owns the
+  // contract: any frame with parent_tool_use_id is consumed here (returned
+  // true) — either appended to the matching task's transcript, or buffered
+  // until task_started arrives, or dropped after ORPHAN_TTL_MS.
   function handleSubAgentFrame(frame: InboundFrame): boolean {
     const parent =
       "parent_tool_use_id" in frame && typeof frame.parent_tool_use_id === "string"
         ? frame.parent_tool_use_id
         : null;
     if (!parent) return false;
+    const now = Date.now();
+    gcPending(now);
     const arr = tasks.get();
     const idx = arr.findIndex((t) => t.toolUseId === parent);
-    // Race: task_started not yet observed. Fall through so the frame still
-    // appears somewhere — visible-but-misplaced beats dropped.
-    if (idx === -1) return false;
+    if (idx === -1) {
+      // Race: task_started not yet observed. Buffer until it lands.
+      const buf = pendingByParent.get(parent) ?? [];
+      buf.push({ frame, addedAt: now });
+      pendingByParent.set(parent, buf);
+      return true;
+    }
     const next = arr.slice();
     const cur = arr[idx]!;
     next[idx] = {
@@ -227,7 +285,7 @@ export function createTasksController(): TasksController {
           arrivalIdx: cur.transcript.length,
         },
       ],
-      lastUpdate: Date.now(),
+      lastUpdate: now,
     };
     tasks.set(next);
     return true;
@@ -235,6 +293,7 @@ export function createTasksController(): TasksController {
 
   function reset() {
     tasks.set([]);
+    pendingByParent.clear();
   }
 
   return {

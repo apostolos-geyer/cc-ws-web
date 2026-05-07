@@ -11,8 +11,19 @@ export function formatCtx(n: number | undefined | null): string {
   return `${(n / 1_000_000).toFixed(1)}m`;
 }
 
-export function formatDuration(ms: number | undefined | null): string {
+// "precise" — sub-second resolution for usage/timing readouts.
+// "wall" — coarse age display ("just now / Nm / Nh / Nd") for "last seen"-type fields.
+export function formatDuration(
+  ms: number | undefined | null,
+  mode: "precise" | "wall" = "precise",
+): string {
   if (ms == null || !Number.isFinite(ms)) return "—";
+  if (mode === "wall") {
+    if (ms < 60_000) return "just now";
+    if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m`;
+    if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h`;
+    return `${Math.floor(ms / 86_400_000)}d`;
+  }
   if (ms < 1_000) return `${Math.round(ms)}ms`;
   if (ms < 60_000) return `${(ms / 1_000).toFixed(1)}s`;
   const m = Math.floor(ms / 60_000);

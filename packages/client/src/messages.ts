@@ -20,10 +20,11 @@ export type ToolUseBlock = {
   name: string;
   input: unknown;
   // partial_json deltas accumulate here, parsed into `input` on
-  // content_block_stop. _parsed flips true once parsed (or on empty input
-  // close).
-  _partialJson: string;
-  _parsed: boolean;
+  // content_block_stop. `parsed` flips true once parsed (or on empty input
+  // close). Renderers read both to show streaming tool inputs before the
+  // JSON is closed.
+  partialJson: string;
+  parsed: boolean;
 };
 export type ThinkingBlock = { type: "thinking"; thinking: string };
 export type StreamingBlock = TextBlock | ToolUseBlock | ThinkingBlock;
@@ -194,8 +195,8 @@ export function createMessagesController(): MessagesController {
           id: cb.id ?? "",
           name: cb.name ?? "",
           input: cb.input ?? {},
-          _partialJson: "",
-          _parsed: false,
+          partialJson: "",
+          parsed: false,
         };
       } else if (cb.type === "thinking") {
         block = { type: "thinking", thinking: cb.thinking ?? "" };
@@ -219,7 +220,7 @@ export function createMessagesController(): MessagesController {
         delta.type === "input_json_delta" &&
         typeof delta.partial_json === "string"
       ) {
-        block._partialJson += delta.partial_json;
+        block.partialJson += delta.partial_json;
       } else if (
         block?.type === "thinking" &&
         delta.type === "thinking_delta" &&
@@ -235,16 +236,16 @@ export function createMessagesController(): MessagesController {
       const msg = id ? streaming.get(id) : null;
       if (!msg) return;
       const block = msg.content[ev.index];
-      if (block?.type === "tool_use" && !block._parsed) {
-        if (block._partialJson) {
+      if (block?.type === "tool_use" && !block.parsed) {
+        if (block.partialJson) {
           try {
-            block.input = JSON.parse(block._partialJson);
-            block._parsed = true;
+            block.input = JSON.parse(block.partialJson);
+            block.parsed = true;
           } catch (err) {
-            console.warn("[stream_event] tool_use partial_json parse failed", err, block._partialJson);
+            console.warn("[stream_event] tool_use partial_json parse failed", err, block.partialJson);
           }
         } else {
-          block._parsed = true;
+          block.parsed = true;
         }
       }
       bumpStreaming(id!);

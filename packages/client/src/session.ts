@@ -239,46 +239,56 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
   let initSeen = false;
 
   ws.onFrame((frame) => {
-    // 1. _local frames (respawn ack).
+    // _local respawn ack — no `type` field, check first.
     if (handleLocalFrame(frame)) return;
 
-    // 2. controls layer (control_response → resolve in-flight requests).
+    // Branch on system vs non-system once. The hot path (stream_event /
+    // assistant at token rate) is non-system; this skips the per-handler
+    // isSystemFrame re-checks that previously walked ~5 system handlers
+    // before reaching messagesCtrl.ingest.
+    if (isSystemFrame(frame)) {
+      switch (frame.subtype) {
+        case "init":
+          if (handleSystemInit(frame)) return;
+          break;
+        case "local_command_output":
+          if (shellCtrl.handleLocalCommandOutput(frame)) return;
+          break;
+        case "hook_started":
+        case "hook_progress":
+        case "hook_response":
+          if (handleHookEvent(frame)) return;
+          break;
+        case "task_started":
+        case "task_progress":
+        case "task_updated":
+        case "task_notification":
+          if (tasksCtrl.handleTaskEvent(frame)) return;
+          break;
+        case "session_state_changed":
+          if (handleSessionStateChanged(frame)) return;
+          break;
+      }
+      // Unknown / unmatched system subtypes (and handlers that returned
+      // false to opt out, e.g. duplicate init): append to timeline.
+      messagesCtrl.pushFrame(frame);
+      return;
+    }
+
+    // Non-system path.
     if (controls.ingest(frame)) return;
-
-    // 3. permissions gate (inbound control_request:can_use_tool).
     if (permissions.ingest(frame)) return;
-
-    // 4. system:init — capture once per spawn.
-    if (handleSystemInit(frame)) return;
-
-    // 5. user/isReplay shell echo / output. Side-effect-only: builds bash
-    //    XML for next-send buffer, falls through so the frame still lands
-    //    in the chat as a normal user bubble.
+    // user/isReplay shell echo. Side-effect-only: builds bash XML for the
+    // next-send buffer, falls through so the frame still lands as a user
+    // bubble.
     shellCtrl.handleShellReplay(frame);
-
-    // 6. system:local_command_output (rare).
-    if (shellCtrl.handleLocalCommandOutput(frame)) return;
-
-    // 7. hooks.
-    if (handleHookEvent(frame)) return;
-
-    // 8. task lifecycle (system:task_started / task_progress / task_notification).
-    if (tasksCtrl.handleTaskEvent(frame)) return;
-
-    // 9. session_state_changed.
-    if (handleSessionStateChanged(frame)) return;
-
-    // 10. Sub-agent frames (parent_tool_use_id set) MUST run BEFORE
-    //     messagesCtrl — the messages controller eats stream_event /
-    //     assistant unconditionally, which would otherwise pollute the
-    //     main timeline with sub-agent bubbles and starve the per-task
-    //     transcript.
+    // Sub-agent frames (parent_tool_use_id set) MUST run BEFORE
+    // messagesCtrl — the messages controller eats stream_event / assistant
+    // unconditionally, which would otherwise pollute the main timeline
+    // with sub-agent bubbles and starve the per-task transcript.
     if (tasksCtrl.handleSubAgentFrame(frame)) return;
-
-    // 11. streaming + canonical assistant — let messages controller decide.
     if (messagesCtrl.ingest(frame)) return;
-
-    // 12. fall-through: drop noisy frames; otherwise append to timeline.
+    // Drop noisy frames; otherwise append.
     if ("type" in frame && frame.type === "rate_limit_event") return;
     messagesCtrl.pushFrame(frame);
   });
@@ -297,7 +307,6 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
 
   function handleSystemInit(frame: InboundFrame): boolean {
     if (initSeen) return false;
-    if (!isSystemFrame(frame) || frame.subtype !== "init") return false;
     initSeen = true;
     const f = frame as SystemInit;
     const m = f.permissionMode ?? f.permission_mode;
@@ -351,14 +360,11 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
   }
 
   function handleHookEvent(frame: InboundFrame): boolean {
-    if (!isSystemFrame(frame)) return false;
-    const sub = frame.subtype;
-    if (sub !== "hook_started" && sub !== "hook_progress" && sub !== "hook_response") return false;
-    const hookFrame = frame as Extract<typeof frame, { subtype: typeof sub }>;
+    const hookFrame = frame as SystemHook;
     const entry: HookEntry = {
       id: crypto.randomUUID(),
       ts: Date.now(),
-      subtype: sub,
+      subtype: hookFrame.subtype,
       hookName: hookFrame.hook_event_name ?? hookFrame.hookEventName,
       raw: hookFrame,
     };
@@ -367,7 +373,6 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
   }
 
   function handleSessionStateChanged(frame: InboundFrame): boolean {
-    if (!isSystemFrame(frame) || frame.subtype !== "session_state_changed") return false;
     const f = frame as SystemSessionStateChanged;
     if (f.state === "idle" || f.state === "running" || f.state === "requires_action") {
       sessionState.set(f.state);

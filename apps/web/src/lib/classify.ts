@@ -71,7 +71,7 @@ function nextUserFrameAt(arr: readonly MessageEntry[], from: number): number {
     const ej = arr[j];
     if (ej?.kind !== "frame") continue;
     const fj = ej.frame;
-    if ("type" in fj && fj.type === "user" && !fj.parent_tool_use_id) return j;
+    if ("type" in fj && fj.type === "user") return j;
   }
   return -1;
 }
@@ -103,9 +103,8 @@ function analyzeEntry(
 
   const f = e.frame;
   if (!("type" in f)) return { rows: [], consumed: 0, shellsDependent: false };
-  if ("parent_tool_use_id" in f && f.parent_tool_use_id) {
-    return { rows: [], consumed: 0, shellsDependent: false };
-  }
+  // Lib guarantees no parent-keyed frame in messages — sub-agent frames
+  // are consumed by tasks.ts before reaching the messages controller.
 
   if (f.type === "user") {
     const text = userText(f.message.content);

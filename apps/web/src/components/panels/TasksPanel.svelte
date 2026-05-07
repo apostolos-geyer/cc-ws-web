@@ -1,16 +1,18 @@
 <script lang="ts">
-  import { getCcSession } from "@somewhatintelligent/cc-ws-svelte";
+  import { getCcSession, type TaskStatus } from "@somewhatintelligent/cc-ws-svelte";
   import { formatDuration, formatCtx } from "../../lib/format";
 
   const session = getCcSession();
   const { tasks } = session.atoms;
 
-  function statusGlyph(s: string) {
-    if (s === "running") return "●";
-    if (s === "completed") return "✓";
-    if (s === "failed") return "✗";
-    if (s === "stopped") return "■";
-    return "·";
+  // Typed param: TS will flag a missing branch when TaskStatus grows a new variant.
+  function statusGlyph(s: TaskStatus): string {
+    switch (s) {
+      case "running": return "●";
+      case "completed": return "✓";
+      case "failed": return "✗";
+      case "stopped": return "■";
+    }
   }
 </script>
 

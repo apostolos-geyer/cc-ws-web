@@ -79,15 +79,17 @@
   let mentionItems = $state<Item[]>([]);
   let mentionToken = 0;
   $effect(() => {
-    const m = mode;
-    if (m.kind !== "mention") {
-      mentionItems = [];
+    // Gate before bumping the token / scheduling debounce — non-mention typing
+    // shouldn't churn timers.
+    if (mode.kind !== "mention") {
+      if (mentionItems.length > 0) mentionItems = [];
       return;
     }
+    const query = mode.query;
     const myToken = ++mentionToken;
     const t = setTimeout(async () => {
       try {
-        const res = await session.fetchFileSuggestions(m.query);
+        const res = await session.fetchFileSuggestions(query);
         if (myToken !== mentionToken) return;
         mentionItems = res.slice(0, 14).map((r) => ({
           id: r.path,
@@ -147,9 +149,12 @@
     textarea.style.height = "0";
     textarea.style.height = Math.min(textarea.scrollHeight, 240) + "px";
   }
+  // Single rAF coalesces fast keystrokes; cancel-on-rerun avoids the stacked-callback
+  // leak the old `tick().then(autosize)` had.
   $effect(() => {
     void value;
-    void tick().then(autosize);
+    const handle = requestAnimationFrame(autosize);
+    return () => cancelAnimationFrame(handle);
   });
 
   // ---------- send ----------

@@ -3,25 +3,21 @@
   import ToolUseCard from "./ToolUseCard.svelte";
   import ThinkingBlock from "./ThinkingBlock.svelte";
 
-  // Live streaming uses StreamingBlock (which includes the lib's internal
-  // _partialJson / _parsed flags on tool_use blocks); finalised assistant
-  // frames use AssistantContentBlock (which doesn't). Accept either.
+  // Live streaming uses StreamingBlock (tool_use carries partialJson / parsed
+  // for in-flight rendering); finalised assistant frames use
+  // AssistantContentBlock (no streaming fields). Accept either.
   let { content = [], streaming = false }: {
     content: AssistantContentBlock[] | StreamingBlock[];
     streaming?: boolean;
   } = $props();
 
-  // Treat a block as "finished parsing" unless it's a streaming tool_use
-  // that's still accumulating partial_json deltas. Reading _parsed off
-  // the union requires a narrow — keep the cast localised here.
   function isParsed(block: AssistantContentBlock | StreamingBlock): boolean {
     if (block.type !== "tool_use") return true;
-    const parsed = (block as { _parsed?: boolean })._parsed;
-    return parsed ?? true;
+    return "parsed" in block ? block.parsed : true;
   }
   function partialJson(block: AssistantContentBlock | StreamingBlock): string {
     if (block.type !== "tool_use") return "";
-    return (block as { _partialJson?: string })._partialJson ?? "";
+    return "partialJson" in block ? block.partialJson : "";
   }
 </script>
 

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getCcSession } from "@somewhatintelligent/cc-ws-svelte";
-  import { shortenPath } from "../lib/format";
+  import { formatDuration, shortenPath } from "../lib/format";
   import { sessionHistory, forget } from "../lib/sessionHistory.svelte";
 
   const session = getCcSession();
@@ -28,14 +28,6 @@
   function copySession() {
     if (!$init.sessionId) return;
     void navigator.clipboard?.writeText($init.sessionId).catch(() => {});
-  }
-
-  function fmtAge(ms: number): string {
-    const d = Date.now() - ms;
-    if (d < 60_000) return "just now";
-    if (d < 3_600_000) return `${Math.floor(d / 60_000)}m`;
-    if (d < 86_400_000) return `${Math.floor(d / 3_600_000)}h`;
-    return `${Math.floor(d / 86_400_000)}d`;
   }
 
   // Click-outside handler for the resume dropdown.
@@ -86,7 +78,7 @@
           <div class="row">
             <button class="row-main" onclick={() => resume(r.id)} title={r.id}>
               <span class="mono">{r.id.slice(0, 8)}</span>
-              <span class="dim">{fmtAge(r.lastSeen)}</span>
+              <span class="dim">{formatDuration(Date.now() - r.lastSeen, "wall")}</span>
             </button>
             <button class="row-x" onclick={() => forget(r.id)} title="forget" aria-label="forget">×</button>
           </div>

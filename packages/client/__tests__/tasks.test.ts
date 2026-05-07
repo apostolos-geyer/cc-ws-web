@@ -125,15 +125,25 @@ describe("task lifecycle", () => {
     expect(h.session.atoms.messages.get()).toHaveLength(messagesBefore);
   });
 
-  test("frames with unknown parent_tool_use_id fall through to main timeline", () => {
+  test("orphan parent_tool_use_id frames are buffered, then flushed when task_started lands", () => {
     const before = h.session.atoms.messages.get().length;
-    // parent_tool_use_id references a tool_use we never saw a task_started for
+    // Frame arrives before its task_started — must NOT touch main timeline.
     h.ws.pushFrame({
       type: "assistant",
-      parent_tool_use_id: "unknown-tu",
-      message: { id: "mX", content: [] },
+      parent_tool_use_id: "tu-late",
+      message: { id: "mEarly", content: [{ type: "text", text: "early" }] },
     } as any);
-    expect(h.session.atoms.messages.get().length).toBe(before + 1);
+    expect(h.session.atoms.messages.get().length).toBe(before);
+
+    // task_started lands; buffered frame drains into the new task's transcript.
+    h.ws.pushFrame({
+      type: "system", subtype: "task_started", task_id: "tLate", tool_use_id: "tu-late", description: "late",
+    } as any);
+    const t = h.session.atoms.tasks.get().find((x) => x.taskId === "tLate")!;
+    expect(t.transcript).toHaveLength(1);
+    expect(t.transcript[0].kind).toBe("frame");
+    // Main timeline still untouched.
+    expect(h.session.atoms.messages.get().length).toBe(before);
   });
 
   test("frames without parent_tool_use_id land in main timeline normally", () => {

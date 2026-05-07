@@ -45,8 +45,8 @@ describe("streaming reducer", () => {
     expect(block.type).toBe("tool_use");
     expect(block.id).toBe("tu1");
     expect(block.name).toBe("Bash");
-    expect(block._partialJson).toBe("");
-    expect(block._parsed).toBe(false);
+    expect(block.partialJson).toBe("");
+    expect(block.parsed).toBe(false);
   });
 
   test("content_block_start attaches thinking block", () => {
@@ -93,8 +93,8 @@ describe("streaming reducer", () => {
       event: { type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: '"ls"}' } },
     } as any);
     const block = streamingEntry(h)!.msg.content[0] as ToolUseBlock;
-    expect(block._partialJson).toBe('{"cmd":"ls"}');
-    expect(block._parsed).toBe(false);
+    expect(block.partialJson).toBe('{"cmd":"ls"}');
+    expect(block.parsed).toBe(false);
   });
 
   test("thinking_delta concatenates", () => {
@@ -130,7 +130,7 @@ describe("streaming reducer", () => {
     expect(block.thinking).toBe("");
   });
 
-  test("content_block_stop on tool_use parses partial_json into input + sets _parsed", () => {
+  test("content_block_stop on tool_use parses partial_json into input + sets parsed", () => {
     h.ws.pushFrame({ type: "stream_event", event: { type: "message_start", message: { id: "m1" } } } as any);
     h.ws.pushFrame({
       type: "stream_event",
@@ -142,11 +142,11 @@ describe("streaming reducer", () => {
     } as any);
     h.ws.pushFrame({ type: "stream_event", event: { type: "content_block_stop", index: 0 } } as any);
     const block = streamingEntry(h)!.msg.content[0] as ToolUseBlock;
-    expect(block._parsed).toBe(true);
+    expect(block.parsed).toBe(true);
     expect(block.input).toEqual({ cmd: "ls" });
   });
 
-  test("content_block_stop with bad JSON warns and leaves _parsed false", () => {
+  test("content_block_stop with bad JSON warns and leaves parsed false", () => {
     const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
     h.ws.pushFrame({ type: "stream_event", event: { type: "message_start", message: { id: "m1" } } } as any);
     h.ws.pushFrame({
@@ -159,7 +159,7 @@ describe("streaming reducer", () => {
     } as any);
     h.ws.pushFrame({ type: "stream_event", event: { type: "content_block_stop", index: 0 } } as any);
     const block = streamingEntry(h)!.msg.content[0] as ToolUseBlock;
-    expect(block._parsed).toBe(false);
+    expect(block.parsed).toBe(false);
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
   });
