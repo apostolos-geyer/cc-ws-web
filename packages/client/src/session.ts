@@ -305,34 +305,45 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
       slashCommands: f.slash_commands ?? [],
       skills: f.skills ?? [],
     });
-    void controls
-      .request({ subtype: "get_settings" }, { timeoutMs: 10_000 })
-      .then(({ inner }) => {
-        const probes: unknown[] = [
-          inner,
-          (inner as Record<string, unknown> | null)?.applied,
-          (inner as Record<string, unknown> | null)?.effective,
-          (inner as Record<string, unknown> | null)?.settings,
-          (inner as Record<string, unknown> | null)?.permissions,
-          (inner as Record<string, unknown> | null)?.inferenceConfig,
-        ];
-        let found: string | undefined;
-        for (const p of probes) {
-          if (!p || typeof p !== "object") continue;
-          const r = p as Record<string, unknown>;
-          const cand =
-            (typeof r.effortLevel === "string" && r.effortLevel) ||
-            (typeof r.effort_level === "string" && r.effort_level) ||
-            (typeof r.effort === "string" && r.effort) ||
-            undefined;
-          if (cand) { found = cand; break; }
-        }
-        if (found && (KNOWN_EFFORTS as readonly string[]).includes(found)) {
-          activeEffort.set(found as Effort);
-          currentArgs.effort = found as Effort;
-        }
-      })
-      .catch(() => {});
+    // system:init doesn't carry effort. Skip the probe if we already
+    // know it (we spawned with --effort or restored from persistence) —
+    // the binary honours the spawn flag, so currentArgs.effort is the
+    // ground truth in that case.
+    if (!currentArgs.effort) {
+      void controls
+        .request({ subtype: "get_settings" }, { timeoutMs: 10_000 })
+        .then(({ inner }) => {
+          const probes: unknown[] = [
+            inner,
+            (inner as Record<string, unknown> | null)?.applied,
+            (inner as Record<string, unknown> | null)?.effective,
+            (inner as Record<string, unknown> | null)?.settings,
+            (inner as Record<string, unknown> | null)?.permissions,
+            (inner as Record<string, unknown> | null)?.inferenceConfig,
+          ];
+          let found: string | undefined;
+          for (const p of probes) {
+            if (!p || typeof p !== "object") continue;
+            const r = p as Record<string, unknown>;
+            const cand =
+              (typeof r.effortLevel === "string" && r.effortLevel) ||
+              (typeof r.effort_level === "string" && r.effort_level) ||
+              (typeof r.effort === "string" && r.effort) ||
+              undefined;
+            if (cand) { found = cand; break; }
+          }
+          if (found && (KNOWN_EFFORTS as readonly string[]).includes(found)) {
+            activeEffort.set(found as Effort);
+            currentArgs.effort = found as Effort;
+          }
+        })
+        .catch((err) => {
+          // Surface the probe failure so the UI shows we don't actually
+          // know what effort the binary picked, instead of silently
+          // displaying "default".
+          setEffortErr(`could not read effort from get_settings: ${String(err)}`);
+        });
+    }
     messagesCtrl.pushFrame(frame);
     return true;
   }
@@ -395,7 +406,13 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
 
   // ---- public methods ----
 
+  // One initial respawn per connect/disconnect cycle. Repeat connect()
+  // calls without an intervening disconnect() are no-ops; otherwise a
+  // duplicate connect would re-spawn against an already-running child.
+  let connectStarted = false;
   function connect() {
+    if (connectStarted) return;
+    connectStarted = true;
     ws.connect();
     // nanostores subscribe fires synchronously with the current value
     // before returning the unsubscribe; `let` + null-guard avoids the
@@ -412,6 +429,7 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
   }
 
   function disconnect() {
+    connectStarted = false;
     // Reject before close so UI buttons don't hang 30s on a torn-down conn
     controls.abortAll("disconnected");
     permissions.clearQueue();
