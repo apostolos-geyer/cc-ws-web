@@ -4,6 +4,7 @@
 import { atom, type ReadableAtom } from "nanostores";
 import { createControlsClient } from "./controls";
 import { createMessagesController, type MessageEntry } from "./messages";
+import { createTasksController, type TaskEntry } from "./tasks";
 import {
   KNOWN_PERMISSION_MODES,
   KNOWN_EFFORTS,
@@ -15,23 +16,23 @@ import {
 } from "./modes";
 import { createPermissionsController, type OnCanUseTool, type PendingPermission, type PermissionDecision } from "./permissions";
 import {
+  installPersistenceWriter,
+  loadPersisted,
+  resolvePersistence,
+  type CcPersistenceOptions,
+} from "./persistence";
+import {
   buildSpawnArgs,
   isLocalRespawnResult,
   isSystemFrame,
-  isUserFrame,
   makeRequestId,
   type InboundFrame,
   type SessionMode,
   type SystemInit,
   type SystemSessionStateChanged,
-  type SystemTaskStarted,
-  type SystemTaskProgress,
-  type SystemTaskNotification,
-  type SystemTaskUpdated,
   type SystemHook,
-  type TaskUsageBlock,
 } from "./protocol";
-import { buildBashXml, parseBashFrame } from "./shell";
+import { createShellController, type ShellEntry } from "./shell";
 import { createWsClient, type WsClient, type WsStatus } from "./ws";
 
 // ---------- public types ----------
@@ -44,80 +45,16 @@ export type HookEntry = {
   raw: SystemHook;
 };
 
-export type ShellSource = "context" | "sideChannel";
+export type { ShellEntry, ShellSource } from "./shell";
+export type { TaskEntry, TaskStatus, TaskUsage } from "./tasks";
 
-export type ShellEntry = {
-  id: string;
-  command: string;
-  source: ShellSource;
-  chunks: string[];
-  // For context-shell: the exchange has run on the bridge but the
-  // <bash-input>/<bash-stdout> XML hasn't been sent to claude yet — it
-  // gets prepended to the user's next sendMessage() (matches the TUI's
-  // shouldQuery:false flow). Cleared when drained.
-  pending?: boolean;
-};
-
-// Ring-buffer caps on append-only atoms. Long-running sessions with
-// chatty hooks or many sub-agents accumulate thousands of entries
-// otherwise; the React renderer iterates the full array each render.
-// Tasks keep N most recent (running tasks always retained — never evict
-// a still-active row); hookEvents is plain FIFO drop-oldest.
+// hookEvents is plain FIFO drop-oldest — long-running sessions with chatty
+// hooks accumulate thousands of entries otherwise.
 const HOOK_EVENTS_CAP = 200;
-const TASKS_CAP = 100;
 
 function capRingFifo<T>(arr: T[], cap: number): T[] {
   return arr.length > cap ? arr.slice(arr.length - cap) : arr;
 }
-
-function capTasksKeepRunning<T extends { status: string }>(arr: T[], cap: number): T[] {
-  if (arr.length <= cap) return arr;
-  // Evict oldest non-running entries first; if all are running, keep all.
-  const overflow = arr.length - cap;
-  const out: T[] = [];
-  let evictBudget = overflow;
-  for (const t of arr) {
-    if (evictBudget > 0 && t.status !== "running") {
-      evictBudget--;
-      continue;
-    }
-    out.push(t);
-  }
-  return out;
-}
-
-// Tasks emitted via system:task_started / task_progress / task_notification.
-// task_id is the binary's local registry id and the value to pass to
-// stopTask(). tool_use_id ties the task back to the tool_use block that
-// spawned it (Bash, Agent, Task, etc) — used to render task progress
-// alongside / inside the parent's tool_use card.
-export type TaskStatus = "running" | "completed" | "failed" | "stopped";
-
-export type TaskUsage = {
-  totalTokens?: number;
-  toolUses?: number;
-  durationMs?: number;
-};
-
-export type TaskEntry = {
-  taskId: string;
-  toolUseId?: string;
-  taskType?: string;       // e.g. "Bash", "Agent", "Task" — exact strings come from the binary
-  description: string;
-  workflowName?: string;
-  prompt?: string;
-  status: TaskStatus;
-  startTime: number;
-  lastUpdate: number;
-  lastToolName?: string;
-  summary?: string;
-  outputFile?: string;
-  usage?: TaskUsage;
-  // Sub-agent transcript (frames received while this task was running with
-  // parent_tool_use_id matching toolUseId). Populated only for tasks that
-  // emit their own frames — bash tasks won't have these.
-  transcript: MessageEntry[];
-};
 
 // session_state_changed: tracks whether claude is mid-turn or idle. Useful
 // for UI affordances (show / hide spinner; prevent send while busy).
@@ -154,30 +91,7 @@ export type CcAtoms = {
   sessionState: ReadableAtom<SessionState>;
 };
 
-// Persistence: when enabled (the default in browsers), the lib remembers
-// sessionId + visible message timeline + active mode/model/effort/tasks
-// to localStorage so a page refresh resumes the same conversation thread
-// AND restores the rendered bubbles (claude's own --continue restores
-// internal context but doesn't restream prior turns over stream-json, so
-// without local persistence the timeline would be empty after refresh).
-//
-// Set `persistence: false` to opt out. Provide a custom `storage` (e.g.
-// sessionStorage, an in-memory shim, IndexedDB-backed wrapper) for
-// non-default targets.
-export type StorageLike = {
-  getItem: (key: string) => string | null;
-  setItem: (key: string, value: string) => void;
-  removeItem: (key: string) => void;
-};
-
-export type CcPersistenceOptions = {
-  enabled?: boolean;
-  storage?: StorageLike;
-  key?: string;
-  // Cap on serialized message entries to keep localStorage manageable.
-  // Streaming entries are never persisted (transient by definition).
-  maxMessages?: number;
-};
+export type { CcPersistenceOptions, StorageLike } from "./persistence";
 
 export type CcSessionOptions = {
   url: string;
@@ -232,6 +146,15 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
   const controls = createControlsClient(ws);
   const messagesCtrl = createMessagesController();
   const permissions = createPermissionsController({ ws, onCanUseTool: opts.onCanUseTool });
+  const tasksCtrl = createTasksController();
+  // Shell controller takes a thunk for sendMessage because both the
+  // controller and sendMessage live inside this factory; the thunk lets
+  // the controller's queued follow-up text fire sendMessage() after the
+  // bash exchange XML lands in the buffer.
+  const shellCtrl = createShellController({
+    ws,
+    sendMessage: (text: string) => sendMessage(text),
+  });
 
   // ---- persistence ----
   // We hydrate from storage BEFORE constructing initial state so saved
@@ -276,8 +199,8 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
   const pendingEffort = atom<Effort | null>(null);
   const effortError = atom<string | null>(null);
   const hookEvents = atom<HookEntry[]>([]);
-  const shellEntries = atom<ShellEntry[]>([]);
-  const tasks = atom<TaskEntry[]>([]);
+  const shellEntries = shellCtrl.shellEntries;
+  const tasks = tasksCtrl.tasks;
   const sessionState = atom<SessionState>("unknown");
 
   // Hydrate the message timeline from persisted snapshot if any. Doing
@@ -287,30 +210,15 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
     messagesCtrl.hydrate(persisted.messages);
   }
 
-  // Save-on-change. We debounce because messages can flood in during a
-  // streaming turn and serializing the entire timeline on every delta
-  // would burn budget. 250ms gives a reasonable batch window.
   if (persistence) {
-    let saveTimer: ReturnType<typeof setTimeout> | null = null;
-    const flush = () => {
-      saveTimer = null;
-      savePersisted(persistence, {
-        sessionId: init.get().sessionId,
-        messages: messagesCtrl.messages.get(),
-        permissionMode: activeMode.get(),
-        model: activeModel.get() || undefined,
-        effort: activeEffort.get() || undefined,
-      });
-    };
-    const schedule = () => {
-      if (saveTimer != null) return;
-      saveTimer = setTimeout(flush, 250);
-    };
-    init.subscribe(schedule);
-    messagesCtrl.messages.subscribe(schedule);
-    activeMode.subscribe(schedule);
-    activeModel.subscribe(schedule);
-    activeEffort.subscribe(schedule);
+    installPersistenceWriter({
+      persistence,
+      init,
+      messagesCtrl,
+      activeMode,
+      activeModel,
+      activeEffort,
+    });
   }
 
   // Transient errors auto-clear after 5s. Each pending update cancels the
@@ -326,33 +234,6 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
   const setModeErr = makeAutoClear(modeError);
   const setModelErr = makeAutoClear(modelError);
   const setEffortErr = makeAutoClear(effortError);
-
-  // Side-channel shell tracking.
-  // bash_command replay frames don't carry a correlation id, but the
-  // binary processes them in the order received and replies in the same
-  // order. So we keep a FIFO of in-flight captures: each call to
-  // sendShellContext / sendBashSideChannel pushes; each scrape of an
-  // output-replay frame shifts. Two bash sends in quick succession used
-  // to clobber each other when we tracked a single `activeShellId`
-  // global — replies for command #1 would land on entry #2's row and
-  // command #1's capture would leak in the map forever.
-  const shellCaptureQueue: {
-    entryId: string;
-    command: string;
-    source: ShellSource;
-    sawInputEcho: boolean;
-  }[] = [];
-  // Buffered <bash-input>/<bash-stdout>/<bash-stderr> XML, FIFO. Filled
-  // when a context-shell capture's output replay arrives; drained by
-  // sendMessage() which prepends to the user's next prompt. The TUI-`!cmd`
-  // parity workaround: bash_command's replay frames are NOT injected
-  // into claude's transcript by the binary (verified empirically).
-  const pendingBashExchanges: { entryId: string; xml: string }[] = [];
-  // Optional follow-up user prompts queued from sendShellContext (the
-  // multi-line `!cmd\n<followup>` form). Fires sendMessage(followUp)
-  // after the bash exchange's XML is buffered, so the followUp goes out
-  // as the user message that drains the buffer.
-  const pendingFollowUps = new Map<string, string>();
 
   // ---- frame ingestion ----
   let initSeen = false;
@@ -373,16 +254,16 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
     // 5. user/isReplay shell echo / output. Side-effect-only: builds bash
     //    XML for next-send buffer, falls through so the frame still lands
     //    in the chat as a normal user bubble.
-    handleShellReplay(frame);
+    shellCtrl.handleShellReplay(frame);
 
     // 6. system:local_command_output (rare).
-    if (handleLocalCommandOutput(frame)) return;
+    if (shellCtrl.handleLocalCommandOutput(frame)) return;
 
     // 7. hooks.
     if (handleHookEvent(frame)) return;
 
     // 8. task lifecycle (system:task_started / task_progress / task_notification).
-    if (handleTaskEvent(frame)) return;
+    if (tasksCtrl.handleTaskEvent(frame)) return;
 
     // 9. session_state_changed.
     if (handleSessionStateChanged(frame)) return;
@@ -392,7 +273,7 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
     //     assistant unconditionally, which would otherwise pollute the
     //     main timeline with sub-agent bubbles and starve the per-task
     //     transcript.
-    if (handleSubAgentFrame(frame)) return;
+    if (tasksCtrl.handleSubAgentFrame(frame)) return;
 
     // 11. streaming + canonical assistant — let messages controller decide.
     if (messagesCtrl.ingest(frame)) return;
@@ -469,65 +350,6 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
     return true;
   }
 
-  // Side-effect-only: scrape bash-* replay frames for shellEntries chunks
-  // + build the buffered XML that rides out on the next sendMessage.
-  // Always returns false so the frame still flows into messagesCtrl for
-  // chat-side rendering.
-  function handleShellReplay(frame: InboundFrame): boolean {
-    if (!isUserFrame(frame) || !frame.isReplay) return false;
-    const c = frame.message.content;
-    if (typeof c !== "string") return false;
-    const parsed = parseBashFrame(c);
-    if (!parsed) return false;
-
-    if (parsed.kind === "input") {
-      // First replay frame for the head capture: the binary acked the
-      // command. Output is still pending.
-      const head = shellCaptureQueue[0];
-      if (head) head.sawInputEcho = true;
-      return false;
-    }
-    // Both "output" (output-only replay) and "merged" (some bridges emit
-    // input + output in one frame) close the head capture in FIFO order.
-    const cap = shellCaptureQueue.shift();
-    if (!cap) return false;
-    const parts: string[] = [];
-    if (parsed.stdout) parts.push(parsed.stdout);
-    if (parsed.stderr) parts.push("[stderr] " + parsed.stderr);
-    if (parsed.exit && parsed.exit !== "0") parts.push(`[exit ${parsed.exit}]`);
-    const chunk = parts.join("\n");
-    shellEntries.set(
-      shellEntries.get().map((s) => (s.id === cap.entryId ? { ...s, chunks: [...s.chunks, chunk] } : s)),
-    );
-    if (cap.source === "context") {
-      // Re-encode for the buffered XML — parseBashFrame decodes the
-      // entities; the outbound payload needs them re-escaped.
-      const stdoutXml = parsed.stdout.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      const stderrXml = parsed.stderr.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      pendingBashExchanges.push({
-        entryId: cap.entryId,
-        xml: buildBashXml(cap.command, stdoutXml, stderrXml),
-      });
-      const followUp = pendingFollowUps.get(cap.entryId);
-      if (followUp) {
-        pendingFollowUps.delete(cap.entryId);
-        sendMessage(followUp);
-      }
-    }
-    return false;
-  }
-
-  function handleLocalCommandOutput(frame: InboundFrame): boolean {
-    if (!isSystemFrame(frame) || frame.subtype !== "local_command_output") return false;
-    const head = shellCaptureQueue[0];
-    if (!head) return false;
-    const content = "content" in frame ? frame.content ?? "" : "";
-    shellEntries.set(
-      shellEntries.get().map((s) => (s.id === head.entryId ? { ...s, chunks: [...s.chunks, content] } : s)),
-    );
-    return true;
-  }
-
   function handleHookEvent(frame: InboundFrame): boolean {
     if (!isSystemFrame(frame)) return false;
     const sub = frame.subtype;
@@ -544,177 +366,12 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
     return true;
   }
 
-  // task_started bookend opens a task; progress updates the running entry;
-  // task_notification closes it with terminal status. See sdkEventQueue.ts
-  // in the leaked source for the canonical shapes.
-  function upsertTask(taskId: string, mut: (t: TaskEntry) => TaskEntry, init?: () => TaskEntry) {
-    const arr = tasks.get();
-    const idx = arr.findIndex((t) => t.taskId === taskId);
-    if (idx === -1) {
-      if (!init) return;
-      tasks.set(capTasksKeepRunning([...arr, mut(init())], TASKS_CAP));
-    } else {
-      const next = arr.slice();
-      next[idx] = mut(arr[idx]!);
-      tasks.set(capTasksKeepRunning(next, TASKS_CAP));
-    }
-  }
-
-  function mapTaskUsage(u: TaskUsageBlock | undefined, prev?: TaskUsage): TaskUsage | undefined {
-    if (!u) return prev;
-    return {
-      totalTokens: u.total_tokens ?? prev?.totalTokens,
-      toolUses: u.tool_uses ?? prev?.toolUses,
-      durationMs: u.duration_ms ?? prev?.durationMs,
-    };
-  }
-
-  function handleTaskEvent(frame: InboundFrame): boolean {
-    if (!isSystemFrame(frame)) return false;
-
-    if (frame.subtype === "task_started") {
-      const f = frame as SystemTaskStarted;
-      if (!f.task_id) return false;
-      const now = Date.now();
-      upsertTask(
-        f.task_id,
-        (t) => ({
-          ...t,
-          toolUseId: f.tool_use_id ?? t.toolUseId,
-          taskType: f.task_type ?? t.taskType,
-          description: f.description ?? t.description,
-          workflowName: f.workflow_name ?? t.workflowName,
-          prompt: f.prompt ?? t.prompt,
-          status: "running",
-          lastUpdate: now,
-        }),
-        () => ({
-          taskId: f.task_id,
-          toolUseId: f.tool_use_id,
-          taskType: f.task_type,
-          description: f.description ?? "",
-          workflowName: f.workflow_name,
-          prompt: f.prompt,
-          status: "running",
-          startTime: now,
-          lastUpdate: now,
-          transcript: [],
-        }),
-      );
-      return true;
-    }
-
-    if (frame.subtype === "task_progress") {
-      const f = frame as SystemTaskProgress;
-      if (!f.task_id) return false;
-      upsertTask(f.task_id, (t) => ({
-        ...t,
-        description: f.description ?? t.description,
-        lastToolName: f.last_tool_name ?? t.lastToolName,
-        summary: f.summary ?? t.summary,
-        usage: mapTaskUsage(f.usage, t.usage),
-        lastUpdate: Date.now(),
-      }));
-      return true;
-    }
-
-    // task_updated is the binary's immediate state-change frame (stop_task
-    // → status:"killed"). The bookend task_notification arrives later;
-    // flip status NOW so a killed task doesn't render as still-running.
-    if (frame.subtype === "task_updated") {
-      const f = frame as SystemTaskUpdated;
-      if (!f.task_id || !f.patch) return false;
-      const rawStatus = f.patch.status;
-      const mapped: TaskStatus | undefined =
-        rawStatus === "killed" ? "stopped" :
-        rawStatus === "completed" || rawStatus === "failed" || rawStatus === "stopped" ? rawStatus :
-        undefined;
-      upsertTask(f.task_id, (t) => ({
-        ...t,
-        status: mapped ?? t.status,
-        lastUpdate: Date.now(),
-      }));
-      return true;
-    }
-
-    if (frame.subtype === "task_notification") {
-      const f = frame as SystemTaskNotification;
-      if (!f.task_id) return false;
-      const status: TaskStatus =
-        f.status === "completed" || f.status === "failed" || f.status === "stopped" ? f.status : "completed";
-      upsertTask(
-        f.task_id,
-        (t) => ({
-          ...t,
-          status,
-          summary: f.summary ?? t.summary,
-          outputFile: f.output_file ?? t.outputFile,
-          usage: mapTaskUsage(f.usage, t.usage),
-          lastUpdate: Date.now(),
-        }),
-        () => ({
-          taskId: f.task_id,
-          toolUseId: f.tool_use_id,
-          taskType: undefined,
-          description: f.summary ?? "",
-          status,
-          startTime: Date.now(),
-          lastUpdate: Date.now(),
-          transcript: [],
-        }),
-      );
-      return true;
-    }
-
-    return false;
-  }
-
   function handleSessionStateChanged(frame: InboundFrame): boolean {
     if (!isSystemFrame(frame) || frame.subtype !== "session_state_changed") return false;
     const f = frame as SystemSessionStateChanged;
     if (f.state === "idle" || f.state === "running" || f.state === "requires_action") {
       sessionState.set(f.state);
     }
-    return true;
-  }
-
-  // Sub-agent frames: any frame with a non-null parent_tool_use_id was
-  // emitted from inside a sub-agent (Task / Agent / teammate). Append to
-  // the matching task's transcript instead of the main timeline so the
-  // parent's chat flow stays clean. Frames without a parent or whose
-  // parent task we haven't seen yet fall through to normal handling.
-  function handleSubAgentFrame(frame: InboundFrame): boolean {
-    // parent_tool_use_id only lives on user/assistant/stream_event frames.
-    const parent =
-      "parent_tool_use_id" in frame && typeof frame.parent_tool_use_id === "string"
-        ? frame.parent_tool_use_id
-        : null;
-    if (!parent) return false;
-    // Locate the task by tool_use_id correlation. If we haven't seen the
-    // task_started yet (race), fall back to letting the main timeline take
-    // it — better visible-but-misplaced than dropped.
-    const arr = tasks.get();
-    const idx = arr.findIndex((t) => t.toolUseId === parent);
-    if (idx === -1) return false;
-    // Build a synthetic FrameEntry without using messagesCtrl so we don't
-    // pollute the main timeline. Streaming reconstruction inside sub-agent
-    // transcripts is out of scope for v0 — we just append the raw frame.
-    const next = arr.slice();
-    const cur = arr[idx]!;
-    next[idx] = {
-      ...cur,
-      transcript: [
-        ...cur.transcript,
-        {
-          kind: "frame" as const,
-          id: crypto.randomUUID(),
-          frame,
-          arrivalIdx: cur.transcript.length,
-        },
-      ],
-      lastUpdate: Date.now(),
-    };
-    tasks.set(next);
     return true;
   }
 
@@ -792,55 +449,10 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
   }
 
   function sendMessage(text: string) {
-    if (!text.trim() && pendingBashExchanges.length === 0) return;
-    // Drain any buffered context-shell bash exchanges and prepend their
-    // <bash-input>/<bash-stdout>/<bash-stderr> XML so claude sees the
-    // bash context in the same shape the TUI's processBashCommand pushes
-    // for `!cmd`. Format intentionally omits <bash-exit-code> (the TUI
-    // doesn't include it; only the bash_command CCR replay does).
-    //
-    // Drained shell entries get removed from shellEntries entirely — the
-    // panel above the input acts as a "queued exchange" indicator that
-    // empties when the user fires the message that flushes the buffer.
-    // The bash exchange remains visible in the chat scrollback.
-    let payload = text;
-    if (pendingBashExchanges.length > 0) {
-      const xml = pendingBashExchanges.map((p) => p.xml).join("\n");
-      payload = text.trim() ? `${xml}\n\n${text}` : xml;
-      const drainedIds = new Set(pendingBashExchanges.map((p) => p.entryId));
-      shellEntries.set(shellEntries.get().filter((s) => !drainedIds.has(s.id)));
-      pendingBashExchanges.length = 0;
-    }
+    if (!text.trim() && !shellCtrl.hasPending()) return;
+    const payload = shellCtrl.drainPending(text);
     messagesCtrl.pushLocalUser(text);
     ws.send({ type: "user", message: { role: "user", content: payload } });
-  }
-
-  function sendShellContext(command: string, followUp = "") {
-    // Route `!cmd` to the binary via the bash_command wire frame: the
-    // binary runs it (with its own bounds, sandboxing, etc) and replays
-    // <bash-input>/<bash-stdout>/<bash-stderr>/<bash-exit-code> as
-    // user/isReplay frames over the wire. Empirically these replay
-    // frames are NOT auto-injected into claude's transcript — we have
-    // to ride them out ourselves on the next user message. The replay
-    // scraper (handleShellReplay) builds the TUI-shape XML and pushes
-    // to pendingBashExchanges; sendMessage() drains.
-    const id = crypto.randomUUID();
-    shellEntries.set([...shellEntries.get(), { id, command, source: "context", chunks: [], pending: true }]);
-    shellCaptureQueue.push({ entryId: id, command, source: "context", sawInputEcho: false });
-    ws.send({ type: "bash_command", command });
-    // If the user typed a follow-up prompt on subsequent lines of the
-    // !cmd input, fire it right after the bash exchange completes — the
-    // drain in sendMessage will prepend the XML to the followUp text.
-    if (followUp.trim()) {
-      pendingFollowUps.set(id, followUp);
-    }
-  }
-
-  function sendBashSideChannel(command: string) {
-    const id = crypto.randomUUID();
-    shellEntries.set([...shellEntries.get(), { id, command, source: "sideChannel", chunks: [] }]);
-    shellCaptureQueue.push({ entryId: id, command, source: "sideChannel", sawInputEcho: false });
-    ws.send({ type: "bash_command", command });
   }
 
   async function interrupt() {
@@ -930,8 +542,8 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
       // stale bubbles from the previous session don't bleed into the new one.
       messagesCtrl.reset();
       hookEvents.set([]);
-      shellEntries.set([]);
-      tasks.set([]);
+      shellCtrl.reset();
+      tasksCtrl.reset();
       // Clear init too, otherwise the OLD sessionId / cwd / agents stay
       // visible in the UI until the new system:init lands (the wire round-
       // trip can be tens of ms but the visual flicker is jarring). Effort/
@@ -1000,10 +612,6 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
     await controls.request({ subtype: "stop_task", task_id: taskId }, { timeoutMs: 10_000 });
   }
 
-  function dismissShellEntry(id: string) {
-    shellEntries.set(shellEntries.get().filter((s) => s.id !== id));
-  }
-
   // ---- assemble ----
 
   const atoms: CcAtoms = {
@@ -1033,8 +641,8 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
     connect,
     disconnect,
     sendMessage,
-    sendShellContext,
-    sendBashSideChannel,
+    sendShellContext: shellCtrl.sendShellContext,
+    sendBashSideChannel: shellCtrl.sendBashSideChannel,
     interrupt,
     endSession,
     setPermissionMode,
@@ -1048,71 +656,7 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
     stopTask,
     respondToPermission: permissions.respond,
     fetchFileSuggestions,
-    dismissShellEntry,
+    dismissShellEntry: shellCtrl.dismissShellEntry,
   };
 }
 
-// ---- persistence helpers ----
-
-type PersistenceConfig = {
-  storage: StorageLike;
-  key: string;
-  maxMessages: number;
-};
-
-type PersistedShape = {
-  sessionId: string | null;
-  messages?: MessageEntry[];
-  permissionMode?: PermissionMode;
-  model?: string;
-  effort?: Effort;
-};
-
-function resolvePersistence(opt: CcSessionOptions["persistence"]): PersistenceConfig | null {
-  if (opt === false) return null;
-  // Default to localStorage when running in a browser; null otherwise so
-  // server-side usage doesn't crash on missing globals.
-  const defaultStorage: StorageLike | null =
-    typeof globalThis !== "undefined" && (globalThis as any).localStorage
-      ? ((globalThis as any).localStorage as StorageLike)
-      : null;
-  const storage = opt?.storage ?? defaultStorage;
-  if (!storage) return null;
-  if (opt && opt.enabled === false) return null;
-  return {
-    storage,
-    key: opt?.key ?? "cc-ws-session",
-    maxMessages: opt?.maxMessages ?? 200,
-  };
-}
-
-function loadPersisted(cfg: PersistenceConfig): PersistedShape | null {
-  try {
-    const raw = cfg.storage.getItem(cfg.key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return null;
-    return parsed as PersistedShape;
-  } catch {
-    return null;
-  }
-}
-
-function savePersisted(cfg: PersistenceConfig, payload: PersistedShape): void {
-  try {
-    // Cap messages: keep only frame + local_user kinds (streaming entries
-    // are transient by definition; serializing them would resurrect a
-    // half-decoded message on reload). Trim to the most recent N.
-    const trimmed: PersistedShape = { ...payload };
-    if (Array.isArray(payload.messages)) {
-      const filtered = payload.messages.filter(
-        (m) => m.kind === "frame" || m.kind === "local_user",
-      );
-      trimmed.messages = filtered.slice(-cfg.maxMessages);
-    }
-    cfg.storage.setItem(cfg.key, JSON.stringify(trimmed));
-  } catch {
-    // Storage full / quota error / serialization error — drop silently.
-    // Persistence is a best-effort UX feature, not a correctness requirement.
-  }
-}
