@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getCcSession } from "@cc-ws/svelte";
+  import { getCcSession } from "@somewhatintelligent/cc-ws-svelte";
   import { tick } from "svelte";
   import { createClassifier } from "../lib/classify";
   import UserRow from "./rows/UserRow.svelte";

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { setCcSession } from "@cc-ws/svelte";
+  import { setCcSession } from "@somewhatintelligent/cc-ws-svelte";
   import { session } from "./lib/session.svelte";
   import { installKeymap } from "./lib/keymap";
   import { installSessionTracker } from "./lib/sessionHistory.svelte";

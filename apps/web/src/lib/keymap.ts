@@ -3,7 +3,7 @@
 // Cmd/Ctrl modifier is required for most shortcuts to avoid clashing with
 // the composer. Shift+Tab cycles permission mode (CC TUI parity).
 
-import type { CcSession } from "@cc-ws/svelte";
+import type { CcSession } from "@somewhatintelligent/cc-ws-svelte";
 import { closePanel, togglePanel, ui } from "./ui.svelte";
 
 type Disposer = () => void;

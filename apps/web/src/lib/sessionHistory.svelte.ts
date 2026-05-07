@@ -7,9 +7,9 @@
 // (dedupe, cap, persist). Surface as a $state object so any consumer
 // (header dropdown, settings panel) is reactive.
 
-import type { CcSession } from "@cc-ws/svelte";
+import type { CcSession } from "@somewhatintelligent/cc-ws-svelte";
 
-const KEY = "@cc-ws/web/session-history";
+const KEY = "@somewhatintelligent/cc-ws-web/session-history";
 const CAP = 25;
 
 export type SessionRecord = {

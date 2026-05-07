@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { sumContextTokens, type ResultFrame } from "@cc-ws/svelte";
+  import { sumContextTokens, type ResultFrame } from "@somewhatintelligent/cc-ws-svelte";
   import { formatDuration, formatCtx } from "../../lib/format";
 
   let { frame }: { frame: ResultFrame } = $props();

@@ -2,7 +2,7 @@
 // conventions: » as the "act on it" cue (auto / acceptEdits / bypass)
 // and ⏸ for plan to reinforce its no-tool-execution semantics.
 
-import type { PermissionMode } from "@cc-ws/svelte";
+import type { PermissionMode } from "@somewhatintelligent/cc-ws-svelte";
 
 type ModeMeta = { color: string; glyph: string; short: string };
 

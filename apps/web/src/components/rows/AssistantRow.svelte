@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { AssistantContentBlock, StreamingBlock } from "@cc-ws/svelte";
+  import type { AssistantContentBlock, StreamingBlock } from "@somewhatintelligent/cc-ws-svelte";
   import ToolUseCard from "./ToolUseCard.svelte";
   import ThinkingBlock from "./ThinkingBlock.svelte";
 

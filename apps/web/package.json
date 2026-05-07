@@ -1,5 +1,5 @@
 {
-  "name": "@cc-ws/web",
+  "name": "@somewhatintelligent/cc-ws-web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,9 +10,9 @@
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
-    "@cc-ws/client": "workspace:*",
-    "@cc-ws/server": "workspace:*",
-    "@cc-ws/svelte": "workspace:*",
+    "@somewhatintelligent/cc-ws-client": "workspace:*",
+    "@somewhatintelligent/cc-ws-server": "workspace:*",
+    "@somewhatintelligent/cc-ws-svelte": "workspace:*",
     "nanostores": "^1.3.0",
     "svelte": "^5.55.5"
   },

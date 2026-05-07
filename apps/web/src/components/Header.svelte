@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getCcSession } from "@cc-ws/svelte";
+  import { getCcSession } from "@somewhatintelligent/cc-ws-svelte";
   import { shortenPath } from "../lib/format";
   import { sessionHistory, forget } from "../lib/sessionHistory.svelte";
 

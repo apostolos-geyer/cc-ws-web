@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getCcSession } from "@cc-ws/svelte";
+  import { getCcSession } from "@somewhatintelligent/cc-ws-svelte";
   import { formatDuration, formatCtx } from "../../lib/format";
 
   const session = getCcSession();

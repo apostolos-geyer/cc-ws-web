@@ -16,7 +16,7 @@ import {
   type ToolResultContentBlock,
   type UnknownSystemFrame,
   type UserContentBlock,
-} from "@cc-ws/svelte";
+} from "@somewhatintelligent/cc-ws-svelte";
 
 export type Row =
   | { id: string; kind: "local_user"; text: string }

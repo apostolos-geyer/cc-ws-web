@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getCcSession, getFrameUsage, sumContextTokens } from "@cc-ws/svelte";
+  import { getCcSession, getFrameUsage, sumContextTokens } from "@somewhatintelligent/cc-ws-svelte";
   import { togglePanel, openPanel } from "../lib/ui.svelte";
   import { formatCtx } from "../lib/format";
   import { modeColor, modeGlyph, modeShort } from "../lib/modes";

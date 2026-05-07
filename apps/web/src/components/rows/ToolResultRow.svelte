@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ToolResultContentBlock } from "@cc-ws/svelte";
+  import type { ToolResultContentBlock } from "@somewhatintelligent/cc-ws-svelte";
 
   let { content = [] }: { content: ToolResultContentBlock[] } = $props();
   let expanded = $state(false);

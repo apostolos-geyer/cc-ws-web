@@ -6,7 +6,7 @@
     PERMISSION_MODE_OPTIONS,
     type Effort,
     type PermissionMode,
-  } from "@cc-ws/svelte";
+  } from "@somewhatintelligent/cc-ws-svelte";
 
   const session = getCcSession();
   const {

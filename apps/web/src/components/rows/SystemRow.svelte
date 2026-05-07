@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { SystemFrame, UnknownSystemFrame } from "@cc-ws/svelte";
+  import type { SystemFrame, UnknownSystemFrame } from "@somewhatintelligent/cc-ws-svelte";
 
   // Catch-all line for system frames the renderer doesn't have a richer
   // template for. Keeps unknown subtypes visible without forcing a
