@@ -108,10 +108,19 @@ describe("save lifecycle", () => {
     await waitForDebounce();
     storage.setItemCalls.length = 0;
 
-    // Open a streaming entry but never send a final assistant frame
+    // Open a streaming entry, then trigger a save by bumping a non-streaming
+    // signal (init). Persistence intentionally doesn't fire on streaming
+    // deltas — the streaming-entry filter is what guarantees that even if
+    // a save lands while a stream is in flight, the snapshot stays clean.
     h.ws.pushFrame({
       type: "stream_event",
       event: { type: "message_start", message: { id: "m1" } },
+    } as any);
+    h.ws.pushFrame({
+      type: "system",
+      subtype: "init",
+      session_id: "sid-1",
+      model: "claude-sonnet-4-6",
     } as any);
     await waitForDebounce();
 

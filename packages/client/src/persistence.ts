@@ -83,8 +83,12 @@ export function savePersisted(cfg: PersistenceConfig, payload: PersistedShape): 
   }
 }
 
-// Wires up debounced save-on-change for the relevant atoms. 250ms batches
-// the streaming-token storm so we don't re-serialize the timeline per delta.
+// Wires up debounced save-on-change for the relevant atoms. We subscribe
+// to messagesCtrl.revision (only bumps on non-streaming changes) rather
+// than `messages` directly — otherwise every streaming token kicks the
+// 250ms timer and we serialize the entire timeline every 250ms during a
+// turn for changes that are about to be discarded by the streaming-entry
+// filter in savePersisted anyway.
 export function installPersistenceWriter(args: {
   persistence: PersistenceConfig;
   init: ReadableAtom<{ sessionId: string | null }>;
@@ -110,7 +114,7 @@ export function installPersistenceWriter(args: {
     saveTimer = setTimeout(flush, 250);
   };
   init.subscribe(schedule);
-  messagesCtrl.messages.subscribe(schedule);
+  messagesCtrl.revision.subscribe(schedule);
   activeMode.subscribe(schedule);
   activeModel.subscribe(schedule);
   activeEffort.subscribe(schedule);

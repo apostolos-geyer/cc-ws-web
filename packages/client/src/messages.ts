@@ -65,6 +65,12 @@ export type MessageEntry = LocalUserEntry | FrameEntry | StreamingEntry;
 export type MessagesController = {
   messages: WritableAtom<MessageEntry[]>;
   activeStreamId: WritableAtom<string | null>;
+  // Bumps on every non-streaming change (pushFrame / pushLocalUser /
+  // dropStreaming / reset / hydrate). Stays still during streaming
+  // deltas. Persistence and other "save on stable change" consumers
+  // should subscribe to this rather than `messages` to avoid paying
+  // a serialization tax once per 250ms while a turn is streaming.
+  revision: WritableAtom<number>;
   pushLocalUser: (text: string) => void;
   pushFrame: (frame: InboundFrame) => void;
   // Returns true if the frame was consumed by the streaming machinery and
@@ -80,6 +86,10 @@ export type MessagesController = {
 export function createMessagesController(): MessagesController {
   const messages = atom<MessageEntry[]>([]);
   const activeStreamId = atom<string | null>(null);
+  const revision = atom(0);
+  function bumpRevision() {
+    revision.set(revision.get() + 1);
+  }
   // Streaming reconstructions, keyed by message id. Mutated in place; each
   // delta bumps the messages atom by emitting a new array reference so
   // subscribers re-render. We accept the array-replacement cost for the
@@ -101,6 +111,7 @@ export function createMessagesController(): MessagesController {
       arrivalIdx: nextIdx(),
     };
     messages.set([...messages.get(), entry]);
+    bumpRevision();
   }
 
   function pushFrame(frame: InboundFrame) {
@@ -111,6 +122,7 @@ export function createMessagesController(): MessagesController {
       arrivalIdx: nextIdx(),
     };
     messages.set([...messages.get(), entry]);
+    bumpRevision();
   }
 
   function startStreaming(id: string, msg: InFlightMessage) {
@@ -153,6 +165,7 @@ export function createMessagesController(): MessagesController {
     streaming.delete(id);
     if (activeStreamId.get() === id) activeStreamId.set(null);
     messages.set(messages.get().filter((e) => !(e.kind === "streaming" && e.id === id)));
+    bumpRevision();
   }
 
   function applyStreamEvent(ev: StreamEvent) {
@@ -275,6 +288,7 @@ export function createMessagesController(): MessagesController {
       ? Math.max(...filtered.map((e) => e.arrivalIdx)) + 1
       : 0;
     messages.set(filtered);
+    bumpRevision();
   }
 
   function reset() {
@@ -282,11 +296,13 @@ export function createMessagesController(): MessagesController {
     activeStreamId.set(null);
     messages.set([]);
     arrivalCounter = 0;
+    bumpRevision();
   }
 
   return {
     messages,
     activeStreamId,
+    revision,
     pushLocalUser,
     pushFrame,
     ingest,

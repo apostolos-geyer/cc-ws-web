@@ -1,7 +1,7 @@
 <script lang="ts">
   import { getCcSession } from "@cc-ws/svelte";
   import { tick } from "svelte";
-  import { classifyMessages } from "../lib/classify";
+  import { createClassifier } from "../lib/classify";
   import UserRow from "./rows/UserRow.svelte";
   import AssistantRow from "./rows/AssistantRow.svelte";
   import ToolResultRow from "./rows/ToolResultRow.svelte";
@@ -34,7 +34,11 @@
     });
   });
 
-  const rows = $derived(classifyMessages($messages, $shellEntries));
+  // Long-lived classifier — memoises per entry.id so a streaming-token
+  // delta only re-runs analysis on the trailing streaming row, not the
+  // whole timeline. Survives the component lifetime.
+  const classifier = createClassifier();
+  const rows = $derived(classifier.classify($messages, $shellEntries));
 </script>
 
 <main bind:this={scrollEl} onscroll={onScroll}>

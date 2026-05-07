@@ -57,16 +57,24 @@ function touch(id: string) {
       ...sessionHistory.records,
     ].slice(0, CAP);
   }
-  save([...sessionHistory.records]);
+  save(sessionHistory.records);
 }
 
 export function forget(id: string) {
   sessionHistory.records = sessionHistory.records.filter((r) => r.id !== id);
-  save([...sessionHistory.records]);
+  save(sessionHistory.records);
 }
 
 export function installSessionTracker(session: CcSession) {
+  // Gate on the sessionId field changing rather than re-firing on every
+  // init bump (init also carries cwd/agents/slashCommands/skills which
+  // shift independently and would otherwise rewrite localStorage on
+  // every rerender of those).
+  let lastId: string | null = null;
   return session.atoms.init.subscribe((init) => {
-    if (init.sessionId) touch(init.sessionId);
+    if (init.sessionId && init.sessionId !== lastId) {
+      lastId = init.sessionId;
+      touch(init.sessionId);
+    }
   });
 }
