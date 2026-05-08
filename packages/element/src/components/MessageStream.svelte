@@ -90,9 +90,7 @@
     min-height: 0;
   }
   .inner {
-    max-width: 880px;
-    margin: 0 auto;
-    padding: 18px 20px 24px;
+    padding: 14px 14px 22px;
     display: flex;
     flex-direction: column;
     gap: 14px;

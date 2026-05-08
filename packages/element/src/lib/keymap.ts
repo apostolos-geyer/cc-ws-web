@@ -69,9 +69,11 @@ export function installKeymap(session: CcSession): Disposer {
         void session.interrupt();
         return;
       case "k":
-        // ⌘K focus the composer (idiomatic).
+        // ⌘K focus the composer (idiomatic). Routed through a custom
+        // event because the composer is now a CodeMirror editor — its
+        // wrapper doesn't accept .focus() directly, the EditorView does.
         e.preventDefault();
-        document.querySelector<HTMLTextAreaElement>("textarea[data-composer]")?.focus();
+        document.dispatchEvent(new CustomEvent("ccws:composer-focus"));
         return;
     }
   }
