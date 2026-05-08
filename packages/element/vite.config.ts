@@ -36,7 +36,7 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
     cssCodeSplit: false,
-    sourcemap: true,
+    sourcemap: false,
     lib: {
       entry: "src/embed/main.ts",
       name: "CcWsChat",
