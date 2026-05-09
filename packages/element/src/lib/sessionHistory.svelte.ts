@@ -1,15 +1,16 @@
-// Tracks every session ID we've ever seen in this browser. The lib's
-// own persistence holds the LATEST session (so refresh resumes it), but
+// Per-instance roster of session IDs we've seen. The lib's own
+// persistence holds the LATEST session (so refresh resumes it), but
 // it doesn't keep a roster — the binary's --resume needs a specific id,
 // and we have no way to recall earlier threads otherwise.
 //
-// Wiring: subscribe to init.sessionId; on change, prepend to the list
-// (dedupe, cap, persist). Surface as a $state object so any consumer
-// (header dropdown, settings panel) is reactive.
+// Storage: namespaced under `${storageKey}:history` in whatever backend
+// the host element resolved (localStorage / sessionStorage / custom adapter
+// / in-memory). Two <cc-ws-chat> elements with different storage-keys keep
+// independent rosters. When no storage is wired, history lives in-memory
+// for the lifetime of the page.
 
-import type { CcSession } from "@somewhatintelligent/cc-ws-svelte";
+import type { CcSession, StorageLike } from "@somewhatintelligent/cc-ws-svelte";
 
-const KEY = "@somewhatintelligent/cc-ws-web/session-history";
 const CAP = 25;
 
 export type SessionRecord = {
@@ -18,9 +19,16 @@ export type SessionRecord = {
   lastSeen: number;
 };
 
-function load(): SessionRecord[] {
+export type SessionHistoryStore = {
+  readonly records: SessionRecord[];
+  forget: (id: string) => void;
+  install: (session: CcSession) => () => void;
+};
+
+function loadFrom(storage: StorageLike | null, key: string | null): SessionRecord[] {
+  if (!storage || !key) return [];
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = storage.getItem(key);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -35,46 +43,77 @@ function load(): SessionRecord[] {
   }
 }
 
-function save(records: SessionRecord[]) {
+function saveTo(storage: StorageLike | null, key: string | null, records: SessionRecord[]) {
+  if (!storage || !key) return;
   try {
-    localStorage.setItem(KEY, JSON.stringify(records));
+    storage.setItem(key, JSON.stringify(records));
   } catch {}
 }
 
-export const sessionHistory = $state<{ records: SessionRecord[] }>({
-  records: load(),
-});
-
-function touch(id: string) {
-  const now = Date.now();
-  const existing = sessionHistory.records.find((r) => r.id === id);
-  if (existing) {
-    existing.lastSeen = now;
-    sessionHistory.records.sort((a, b) => b.lastSeen - a.lastSeen);
-  } else {
-    sessionHistory.records = [
-      { id, firstSeen: now, lastSeen: now },
-      ...sessionHistory.records,
-    ].slice(0, CAP);
-  }
-  save(sessionHistory.records);
-}
-
-export function forget(id: string) {
-  sessionHistory.records = sessionHistory.records.filter((r) => r.id !== id);
-  save(sessionHistory.records);
-}
-
-export function installSessionTracker(session: CcSession) {
-  // Gate on the sessionId field changing rather than re-firing on every
-  // init bump (init also carries cwd/agents/slashCommands/skills which
-  // shift independently and would otherwise rewrite localStorage on
-  // every rerender of those).
-  let lastId: string | null = null;
-  return session.atoms.init.subscribe((init) => {
-    if (init.sessionId && init.sessionId !== lastId) {
-      lastId = init.sessionId;
-      touch(init.sessionId);
-    }
+export function createSessionHistory(
+  storage: StorageLike | null,
+  storageKey: string | null,
+): SessionHistoryStore {
+  const histKey = storageKey ? `${storageKey}:history` : null;
+  // The whole object is wrapped in $state — assigning to .records or
+  // mutating the array both trigger reactivity.
+  const state = $state<{ records: SessionRecord[] }>({
+    records: loadFrom(storage, histKey),
   });
+
+  function touch(id: string) {
+    const now = Date.now();
+    const existing = state.records.find((r) => r.id === id);
+    if (existing) {
+      existing.lastSeen = now;
+      state.records.sort((a, b) => b.lastSeen - a.lastSeen);
+    } else {
+      state.records = [
+        { id, firstSeen: now, lastSeen: now },
+        ...state.records,
+      ].slice(0, CAP);
+    }
+    saveTo(storage, histKey, state.records);
+  }
+
+  return {
+    get records() {
+      return state.records;
+    },
+    forget(id: string) {
+      state.records = state.records.filter((r) => r.id !== id);
+      saveTo(storage, histKey, state.records);
+    },
+    install(session: CcSession) {
+      // Gate on the sessionId field changing rather than re-firing on every
+      // init bump (init also carries cwd/agents/slashCommands/skills which
+      // shift independently and would otherwise rewrite storage on every
+      // rerender of those).
+      let lastId: string | null = null;
+      return session.atoms.init.subscribe((init) => {
+        if (init.sessionId && init.sessionId !== lastId) {
+          lastId = init.sessionId;
+          touch(init.sessionId);
+        }
+      });
+    },
+  };
+}
+
+const HISTORY_CONTEXT_KEY = Symbol.for("@somewhatintelligent/cc-ws-web:session-history");
+
+import { getContext, setContext } from "svelte";
+
+export function setSessionHistory(store: SessionHistoryStore): void {
+  setContext(HISTORY_CONTEXT_KEY, store);
+}
+
+export function getSessionHistory(): SessionHistoryStore {
+  const s = getContext<SessionHistoryStore | undefined>(HISTORY_CONTEXT_KEY);
+  if (!s) {
+    throw new Error(
+      "getSessionHistory() must run inside a component whose ancestor provided one via setSessionHistory().",
+    );
+  }
+  return s;
 }

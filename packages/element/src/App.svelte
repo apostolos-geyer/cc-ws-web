@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
-  import { setCcSession } from "@somewhatintelligent/cc-ws-svelte";
-  import { createSession } from "./lib/session.svelte";
+  import { setCcSession, type StorageLike } from "@somewhatintelligent/cc-ws-svelte";
+  import { createSession, type PersistMode } from "./lib/session.svelte";
   import { installKeymap } from "./lib/keymap";
-  import { installSessionTracker } from "./lib/sessionHistory.svelte";
+  import { createSessionHistory, setSessionHistory } from "./lib/sessionHistory.svelte";
   import { ui, openPanel } from "./lib/ui.svelte";
   import Header from "./components/Header.svelte";
   import MessageStream from "./components/MessageStream.svelte";
@@ -13,11 +13,19 @@
 
   let {
     wsUrl,
+    persist,
     storageKey,
+    customStorage,
+    initialState,
+    onSnapshot,
     installKeybinds = true,
   }: {
     wsUrl?: string;
+    persist?: PersistMode;
     storageKey?: string;
+    customStorage?: StorageLike;
+    initialState?: string;
+    onSnapshot?: (snapshot: string) => void;
     installKeybinds?: boolean;
   } = $props();
 
@@ -27,11 +35,19 @@
   // props via untrack: we capture the values at mount time on purpose
   // and don't react to subsequent prop changes (would be a session swap,
   // not what consumers usually mean).
-  const session = createSession({
+  const bootstrap = createSession({
     wsUrl: untrack(() => wsUrl),
+    persist: untrack(() => persist),
     storageKey: untrack(() => storageKey),
+    customStorage: untrack(() => customStorage),
+    initialState: untrack(() => initialState),
+    onSnapshot: untrack(() => onSnapshot),
   });
+  const session = bootstrap.session;
   setCcSession(session);
+
+  const history = createSessionHistory(bootstrap.storage, bootstrap.storageKey);
+  setSessionHistory(history);
 
   const { pendingPermissions } = session.atoms;
 
@@ -47,7 +63,7 @@
   });
 
   onMount(() => {
-    const offHist = installSessionTracker(session);
+    const offHist = history.install(session);
     const offKey = installKeybinds ? installKeymap(session) : () => {};
     return () => {
       offHist();

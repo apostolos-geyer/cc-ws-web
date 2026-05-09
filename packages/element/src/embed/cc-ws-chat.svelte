@@ -2,9 +2,11 @@
   tag: "cc-ws-chat",
   shadow: "open",
   props: {
-    wsUrl:      { attribute: "ws-url",      type: "String"  },
-    storageKey: { attribute: "storage-key", type: "String"  },
-    keybinds:   { attribute: "keybinds",    type: "Boolean" },
+    wsUrl:        { attribute: "ws-url",        type: "String"  },
+    persist:      { attribute: "persist",       type: "String"  },
+    storageKey:   { attribute: "storage-key",   type: "String"  },
+    initialState: { attribute: "initial-state", type: "String"  },
+    keybinds:     { attribute: "keybinds",      type: "Boolean" },
   },
 }} />
 
@@ -20,21 +22,61 @@
   // Children (Header, MessageStream, etc.) are regular Svelte components;
   // their scoped styles are bundled into THIS shadow root by the compiler
   // when the parent is a customElement-tagged component.
+  //
+  // Persistence: see App.svelte / session.svelte.ts. Default is no
+  // persistence — the host opts in via:
+  //   <cc-ws-chat persist="local" storage-key="my-chat">         // ← built-in localStorage
+  //   <cc-ws-chat persist="session" storage-key="my-chat">       // ← built-in sessionStorage
+  //   <cc-ws-chat initial-state='{"sessionId":"…"}'>             // ← host-driven via attribute
+  //   el.addEventListener("cc-ws-state-change", e => save(e.detail))  // ← snapshot mirror
   import App from "../App.svelte";
+  import { onMount } from "svelte";
 
   let {
     wsUrl,
+    persist,
     storageKey,
+    initialState,
     keybinds = false,
   }: {
     wsUrl?: string;
+    persist?: "local" | "session" | "none";
     storageKey?: string;
+    initialState?: string;
     keybinds?: boolean;
   } = $props();
+
+  // Resolve the host element so we can dispatch CustomEvents on the
+  // `<cc-ws-chat>` itself (host code does
+  // `el.addEventListener("cc-ws-state-change", …)`).
+  let rootEl: HTMLDivElement | null = $state(null);
+  let host: HTMLElement | null = null;
+  onMount(() => {
+    // The shadow root's host is the cc-ws-chat element. Walk up via
+    // getRootNode() so this works regardless of where in the tree
+    // <App> mounts.
+    const root = rootEl?.getRootNode();
+    if (root instanceof ShadowRoot) host = root.host as HTMLElement;
+  });
+
+  function emitSnapshot(snapshot: string) {
+    host?.dispatchEvent(new CustomEvent("cc-ws-state-change", {
+      detail: snapshot,
+      bubbles: false,
+      composed: false,
+    }));
+  }
 </script>
 
-<div class="root">
-  <App {wsUrl} {storageKey} installKeybinds={keybinds} />
+<div class="root" bind:this={rootEl}>
+  <App
+    {wsUrl}
+    {persist}
+    {storageKey}
+    {initialState}
+    onSnapshot={emitSnapshot}
+    installKeybinds={keybinds}
+  />
 </div>
 
 <style>

@@ -1,9 +1,10 @@
 <script lang="ts">
   import { getCcSession } from "@somewhatintelligent/cc-ws-svelte";
   import { formatDuration, shortenPath } from "../lib/format";
-  import { sessionHistory, forget } from "../lib/sessionHistory.svelte";
+  import { getSessionHistory } from "../lib/sessionHistory.svelte";
 
   const session = getCcSession();
+  const history = getSessionHistory();
   const { status, init } = session.atoms;
 
   let resumeOpen = $state(false);
@@ -12,7 +13,7 @@
   // Records other than the active one. CC's --resume picker excludes
   // the current session for the same reason (resuming yourself = no-op).
   const others = $derived(
-    sessionHistory.records.filter((r) => r.id !== $init.sessionId),
+    history.records.filter((r) => r.id !== $init.sessionId),
   );
 
   async function newSession() {
@@ -80,7 +81,7 @@
               <span class="mono">{r.id.slice(0, 8)}</span>
               <span class="dim">{formatDuration(Date.now() - r.lastSeen, "wall")}</span>
             </button>
-            <button class="row-x" onclick={() => forget(r.id)} title="forget" aria-label="forget">×</button>
+            <button class="row-x" onclick={() => history.forget(r.id)} title="forget" aria-label="forget">×</button>
           </div>
         {/each}
       </div>

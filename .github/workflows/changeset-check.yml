@@ -1,0 +1,31 @@
+name: Changeset check
+
+# Reminds contributors to add a changeset to PRs that modify publishable
+# packages. Failing this job is advisory — merge anyway if the change is
+# non-publishable (docs, tests, app code) by adding an empty changeset
+# via `bun run changeset --empty`.
+
+on:
+  pull_request:
+    branches:
+      - trunk
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Verify changeset present
+        run: bun changeset status --since=origin/trunk

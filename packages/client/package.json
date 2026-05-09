@@ -1,6 +1,6 @@
 {
   "name": "@somewhatintelligent/cc-ws-client",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Framework-agnostic reactive WebSocket client for the cc-ws Claude Code bridge protocol.",
   "license": "MIT",
   "type": "module",

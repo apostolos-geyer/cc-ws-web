@@ -1,7 +1,7 @@
 <script lang="ts">
   import { getCcSession } from "@somewhatintelligent/cc-ws-svelte";
   import { onMount } from "svelte";
-  import { EditorView, keymap, placeholder } from "@codemirror/view";
+  import { EditorView, keymap, placeholder, drawSelection } from "@codemirror/view";
   import { EditorState, Compartment, Prec } from "@codemirror/state";
   import { history, historyKeymap, defaultKeymap, insertNewlineAndIndent } from "@codemirror/commands";
   import { vim, getCM } from "@replit/codemirror-vim";
@@ -186,8 +186,14 @@
     });
   });
 
-  // Vim toggle: reconfigure compartment in/out, and re-bind the mode-change
-  // observer when we add the extension back.
+  // Vim toggle: only the vim compartment flips. drawSelection is added
+  // unconditionally below so the .cm-cursor overlay is always present —
+  // vim's theme hides it via `.cm-vimMode .cm-cursorLayer:not(.cm-vimCursorLayer)`
+  // during normal/visual, but in insert mode vim removes the .cm-vimMode
+  // class (codemirror-vim updateClass) so our drawSelection cursor takes
+  // over. Without this, vim insert mode relies on the native browser
+  // caret, which goes flaky across click-out → click-back-in cycles in
+  // a shadow-DOM contenteditable.
   $effect(() => {
     const enabled = vimEnabled;
     saveVim(enabled);
@@ -202,6 +208,49 @@
       vimMode = "insert";
     }
   });
+
+  // Idempotent — multiple Composers in the same shadow root share one stylesheet.
+  function injectCursorStyles(root: Document | ShadowRoot) {
+    const MARK = "data-ccws-cursor-styles";
+    const target = root instanceof ShadowRoot ? root : root.head;
+    if (target.querySelector(`style[${MARK}]`)) return;
+    const style = document.createElement("style");
+    style.setAttribute(MARK, "");
+    style.textContent = `
+      /* Show CM's drawn caret whenever the editor really has focus.
+         Bypasses CM's .cm-focused class, which is updated on its own
+         schedule and loses to shadow-DOM focus retargeting. drawSelection
+         is always installed (see Composer.svelte) so this overlay is
+         the visible cursor in vim-off and vim-insert modes; vim's own
+         theme hides it during vim normal/visual via .cm-vimMode. */
+      .cm-editor:focus-within .cm-cursorLayer {
+        display: block !important;
+        animation: ccws-cm-blink 1.2s steps(1) infinite;
+      }
+      .cm-editor:focus-within .cm-cursorLayer .cm-cursor,
+      .cm-editor:focus-within .cm-cursorLayer .cm-cursor-primary {
+        display: block !important;
+        border-left-color: var(--accent) !important;
+        border-left-width: 2px !important;
+      }
+      @keyframes ccws-cm-blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0; }
+      }
+      /* Vim block cursor — solid when focused, outlined otherwise. */
+      .cm-editor:focus-within .cm-fat-cursor {
+        background: var(--accent) !important;
+        color: var(--bg) !important;
+        outline: none !important;
+      }
+      .cm-editor:not(:focus-within) .cm-fat-cursor {
+        background: transparent !important;
+        outline: 1px solid var(--accent) !important;
+        color: inherit !important;
+      }
+    `;
+    target.appendChild(style);
+  }
 
   function bindVimModeObserver() {
     if (!view) return;
@@ -297,6 +346,12 @@
       extensions: [
         Prec.highest(customKeymap),
         vimCompartment.of(vimEnabled ? vim() : []),
+        // drawSelection always-on — see the vim toggle effect above for
+        // the why. Vim's theme hides this layer in normal/visual via
+        // `.cm-vimMode .cm-cursorLayer:not(.cm-vimCursorLayer)`, and in
+        // insert mode the .cm-vimMode class is removed so this layer
+        // becomes the visible caret.
+        drawSelection(),
         history(),
         EditorView.lineWrapping,
         placeholderCompartment.of(placeholder(placeholderText())),
@@ -319,6 +374,16 @@
     const root = editorEl.getRootNode() as Document | ShadowRoot;
     view = new EditorView({ state: startState, parent: editorEl, root });
     if (vimEnabled) bindVimModeObserver();
+
+    // Inject cursor-visibility rules directly into the editor's root
+    // (shadow or document). We've burned hours on Svelte+customElement
+    // style scoping vs CM's adoptedStyleSheets vs vim's `!important`
+    // hideNativeSelection — direct injection sidesteps the ordering
+    // war. Using `:focus-within` on `.cm-editor` keys off real DOM
+    // focus instead of CM's `.cm-focused` class, which races with
+    // shadow-DOM focus retargeting and sometimes never lands.
+    injectCursorStyles(root);
+
     view.focus();
 
     // ⌘K (and any other "focus the composer" caller) routes through this
@@ -470,16 +535,10 @@
   }
   .cm-host :global(.cm-line) { padding: 0; }
   .cm-host :global(.cm-placeholder) { color: var(--fg-3); }
-  .cm-host :global(.cm-cursor) { border-left-color: var(--accent); }
-  /* vim block cursor in normal/visual mode */
-  .cm-host :global(.cm-fat-cursor) {
-    background: var(--accent);
-    color: var(--bg);
-    outline: none;
-  }
   .composer.shell .cm-host :global(.cm-content) { color: var(--ok); }
-  .composer.shell .cm-host :global(.cm-cursor) { border-left-color: var(--ok); }
-  .composer.shell .cm-host :global(.cm-fat-cursor) { background: var(--ok); }
+  /* Cursor & caret rules live in injectCursorStyles() — they have to
+     dodge Svelte's customElement scoping war with CM's adoptedStyleSheets
+     and vim's `!important` hideNativeSelection theme. Centralised there. */
 
   .hint {
     color: var(--fg-3);
