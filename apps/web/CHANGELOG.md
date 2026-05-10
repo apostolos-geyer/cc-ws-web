@@ -1,5 +1,12 @@
 # @somewhatintelligent/cc-ws-web
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies
+  - @somewhatintelligent/cc-ws-svelte@0.1.6
+
 ## 0.1.2
 
 ### Patch Changes

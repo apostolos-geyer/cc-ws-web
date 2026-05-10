@@ -13,7 +13,7 @@
     "test": "bun test",
     "changeset": "changeset",
     "version": "changeset version && bun install",
-    "release": "bun run build && for dir in packages/*; do (cd \"$dir\" && bun publish --access public || true); done && changeset tag"
+    "release": "bun run build && for dir in packages/*; do (cd \"$dir\" && bun publish --access public --tolerate-republish); done && changeset tag"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
