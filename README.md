@@ -21,7 +21,7 @@ Each app and package is wired as a Bun workspace under `packages/*` and `apps/*`
 | [`@somewhatintelligent/cc-ws-server`](packages/server)  | Bun WebSocket server. Spawns one `claude` child per WS connection, pumps NDJSON between stdio and the wire. Ships with a `cc-ws-server` CLI bin. |
 | [`@somewhatintelligent/cc-ws-client`](packages/client)  | Framework-agnostic reactive client. Wraps the wire protocol in nanostores atoms (messages, status, permissions, tasks, hooks, mode, model, …). |
 | [`@somewhatintelligent/cc-ws-react`](packages/react)    | React adapter. `useCcSession(session)` hook over `@nanostores/react`. |
-| [`@somewhatintelligent/cc-ws-svelte`](packages/svelte)  | Svelte adapter. Re-export over `@nanostores/svelte`. Workspace-only for now. |
+| [`@somewhatintelligent/cc-ws-svelte`](packages/svelte)  | Svelte adapter. Typed context injection over the nanostores atoms (which already implement Svelte's store contract). |
 | [`@somewhatintelligent/cc-ws-element`](packages/element) | `<cc-ws-chat>` Custom Element. Drop-in shadow-DOM-isolated chat UI; works in any framework. Built from the Svelte UI in `packages/element/src/`. |
 
 ### `apps/` — reference hosts

@@ -10,5 +10,5 @@ session.sendMessage("Hello");
 
 // Subscribe via nanostores; or use the framework adapters:
 // - @somewhatintelligent/cc-ws-react
-// - @somewhatintelligent/cc-ws-svelte (workspace-only for now)
+// - @somewhatintelligent/cc-ws-svelte
 ```
