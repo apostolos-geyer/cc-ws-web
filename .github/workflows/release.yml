@@ -26,20 +26,24 @@ jobs:
         with:
           bun-version: latest
 
+      # `bun publish` reads .npmrc for the auth token (changesets/action only
+      # writes it for npm publish, which we no longer use — workspace:*
+      # protocol leaks through changeset's per-package npm publish).
+      - name: Setup npmrc
+        run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > .npmrc
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
       - name: Test
         run: bun test
 
-      - name: Build
-        run: bun run build
-
-      # Two-mode action: if there are pending changesets in `.changeset/`,
-      # opens (or updates) a "Version Packages" PR that consumes them and
-      # bumps versions. If the head of trunk has no pending changesets
-      # (i.e. that PR was just merged), runs `publish` to push the bumped
-      # packages to npm.
+      # Two-mode action: pending changesets in `.changeset/` → opens (or
+      # updates) a "Version Packages" PR that consumes them and bumps
+      # versions. No pending changesets (PR was just merged) → runs
+      # `release`, which builds + iterates packages/* with `bun publish`
+      # (which natively rewrites `workspace:*` to the resolved version,
+      # unlike `changeset publish`).
       - name: Create release PR or publish
         id: changesets
         uses: changesets/action@v1

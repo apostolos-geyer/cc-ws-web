@@ -12,8 +12,8 @@
     "build": "bun --filter './packages/element' build",
     "test": "bun test",
     "changeset": "changeset",
-    "version": "changeset version",
-    "release": "bun run build && changeset publish"
+    "version": "changeset version && bun install",
+    "release": "bun run build && for dir in packages/*; do (cd \"$dir\" && bun publish --access public || true); done && changeset tag"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
