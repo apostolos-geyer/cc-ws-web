@@ -520,7 +520,6 @@ function extractFieldsFromObjectBody(body: string): SchemaField[] {
       // looking for `<ident>:` if we don't currently have one
       if (currentName === null && /[A-Za-z_$"']/.test(c)) {
         // Key can be quoted (`"foo-bar":`) or bare ident.
-        let keyStart = j;
         let key: string;
         if (c === '"' || c === "'") {
           // quoted key
