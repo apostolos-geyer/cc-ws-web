@@ -58,20 +58,84 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// ---------- regexes ----------
+// ---------- aliases (auto-detected per binary) ----------
+//
+// Anthropic's bundler renames the lazy-schema wrapper and zod import on each
+// build. v2.1.129 used `xH=lazySchema` + `v=zod`; v2.1.139 uses `CH=lazySchema`
+// + `y=zod` (plus a couple of secondary `y`-equivalents `fK`/`l6` from chunk
+// splits — same zod, different bound import in a different chunk). Hard-coding
+// either alias breaks on every binary bump, so we detect both from the binary
+// itself by counting `<ident>(()=><ident>.<zodKind>` occurrences. The pair
+// with the dominant count is the (lazy, zod) we want; secondary zod aliases
+// over a threshold are kept and folded into the regexes via alternation.
 
-// `<ident>=xH(` — anchor for every lazy schema definition.
-const DEF_RE = /\b([A-Za-z_$][\w$]{0,30})=xH\(/g;
+const ZOD_KINDS_RE_PART =
+  '(?:object|union|literal|enum|array|string|boolean|number|record|partialRecord|' +
+  'discriminatedUnion|looseObject|strictObject|tuple|lazy|any|null|unknown|' +
+  'preprocess|nullable|optional|nullish)';
 
-// First `v.<kind>` after the lazy lambda — the schema's top-level type.
-const KIND_RE = /^\(\)=>v\.([a-zA-Z]+)\b/;
+interface Aliases {
+  lazy: string;         // e.g. "xH" (v2.1.129) or "CH" (v2.1.139)
+  zod: string[];        // e.g. ["v"] or ["y", "fK", "l6"]
+}
 
-// Stable structural discriminants — wire-format API contracts.
-const TYPE_LIT_RE = /\btype:v\.literal\("([^"]+)"\)/;
-const SUBTYPE_LIT_RE = /\bsubtype:v\.literal\("([^"]+)"\)/;
+function detectAliases(text: string): Aliases {
+  // Per (lazyIdent, zodIdent) pair, count how many times the binary contains
+  // `<lazy>(()=><zod>.<zodKind>`. The dominant pair is the real one.
+  const pairRe = new RegExp(
+    `\\b([A-Za-z_$][\\w$]{0,4})\\(\\(\\)=>([A-Za-z_$][\\w$]{0,4})\\.${ZOD_KINDS_RE_PART}\\b`,
+    'g',
+  );
+  const pairCount: Record<string, number> = {};
+  for (const m of text.matchAll(pairRe)) {
+    const key = `${m[1]} ${m[2]}`;
+    pairCount[key] = (pairCount[key] ?? 0) + 1;
+  }
+  const ranked = Object.entries(pairCount).sort((a, b) => b[1] - a[1]);
+  if (ranked.length === 0) {
+    throw new Error(
+      'detectAliases: no lazy/zod pair patterns found in binary — ' +
+      'bundle format may have changed beyond regex extraction (V1 limit).',
+    );
+  }
+  const dominantLazy = ranked[0][0].split(' ')[0];
+  // Keep every zod alias that pairs with the dominant lazy, above a threshold.
+  // Threshold = 5 (filters noise from accidental identifier collisions).
+  const zodAliases = ranked
+    .filter(([k, n]) => k.split(' ')[0] === dominantLazy && n >= 5)
+    .map(([k]) => k.split(' ')[1]);
+  return { lazy: dominantLazy, zod: zodAliases };
+}
 
-// All describe() strings inside a body.
-const DESC_RE = /\.describe\("((?:[^"\\]|\\.)*)"\)/g;
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function zodAlt(aliases: Aliases): string {
+  return `(?:${aliases.zod.map(escapeRe).join('|')})`;
+}
+
+interface Patterns {
+  defRe: RegExp;        // `<id>=<lazy>(` global
+  kindRe: RegExp;       // `^()=><zod>.<kind>` non-global
+  typeLitRe: RegExp;    // `type:<zod>.literal("X")`
+  subtypeLitRe: RegExp; // `subtype:<zod>.literal("X")`
+  descRe: RegExp;       // `.describe("...")` global — alias-free
+  bodyPrefix: RegExp;   // for the startsWith check post-paren-balanced parse
+}
+
+function buildPatterns(aliases: Aliases): Patterns {
+  const lazy = escapeRe(aliases.lazy);
+  const zod = zodAlt(aliases);
+  return {
+    defRe: new RegExp(`\\b([A-Za-z_$][\\w$]{0,30})=${lazy}\\(`, 'g'),
+    kindRe: new RegExp(`^\\(\\)=>${zod}\\.([a-zA-Z]+)\\b`),
+    typeLitRe: new RegExp(`\\btype:${zod}\\.literal\\("([^"]+)"\\)`),
+    subtypeLitRe: new RegExp(`\\bsubtype:${zod}\\.literal\\("([^"]+)"\\)`),
+    descRe: /\.describe\("((?:[^"\\]|\\.)*)"\)/g,
+    bodyPrefix: new RegExp(`^\\(\\)=>${zod}\\.`),
+  };
+}
 
 // Cross-reference candidates — `<ident>()` calls inside a body.
 const XREF_RE = /\b([A-Za-z_$][\w$]{0,30})\(\)/g;
@@ -178,10 +242,20 @@ function findBalanced(text: string, openIdx: number): number {
  * The body parser is string/comment-aware so nested `"]"` characters inside
  * string literals don't terminate the array prematurely.
  */
-function extractEnumValues(body: string): string[] | null {
-  const callIdx = body.indexOf('v.enum(');
+function extractEnumValues(body: string, aliases: Aliases): string[] | null {
+  // Find first `<zod>.enum(` across all detected zod aliases.
+  let callIdx = -1;
+  let head = '';
+  for (const z of aliases.zod) {
+    const probe = `${z}.enum(`;
+    const idx = body.indexOf(probe);
+    if (idx >= 0 && (callIdx < 0 || idx < callIdx)) {
+      callIdx = idx;
+      head = probe;
+    }
+  }
   if (callIdx < 0) return null;
-  const argStart = callIdx + 'v.enum('.length;
+  const argStart = callIdx + head.length;
   if (body[argStart] !== '[') return null; // `v.enum(<ident>)` — opaque to us
   // Walk the [...] body, string/comment-aware, and collect "..." literals at depth 1.
   let i = argStart + 1;
@@ -297,15 +371,21 @@ function extractEnumValues(body: string): string[] | null {
 
 // ---------- main extraction ----------
 
-function extract(binaryPath: string): Record<string, SchemaEntry> {
+function extract(binaryPath: string): { schemas: Record<string, SchemaEntry>; aliases: Aliases } {
   const raw = readFileSync(binaryPath);
   // The JS region is ASCII; non-decodable bytes elsewhere become replacement chars and don't matter.
   const text = raw.toString('utf8');
 
+  const aliases = detectAliases(text);
+  const P = buildPatterns(aliases);
+  console.error(
+    `detected aliases: lazy=${aliases.lazy}, zod=[${aliases.zod.join(', ')}]`,
+  );
+
   const schemas: Record<string, SchemaEntry> = {};
   const seen = new Set<string>();
 
-  for (const m of text.matchAll(DEF_RE)) {
+  for (const m of text.matchAll(P.defRe)) {
     const ident = m[1];
     if (seen.has(ident)) continue;       // first definition wins; later collisions ignored
     const matchEnd = (m.index ?? 0) + m[0].length;
@@ -314,17 +394,17 @@ function extract(binaryPath: string): Record<string, SchemaEntry> {
     const closeIdx = findBalanced(text, openParenIdx);
     if (closeIdx < 0) continue;
     const body = text.slice(openParenIdx + 1, closeIdx);
-    if (!body.startsWith('()=>v.')) continue;
+    if (!P.bodyPrefix.test(body)) continue;
     seen.add(ident);
 
-    const kindM = body.match(KIND_RE);
+    const kindM = body.match(P.kindRe);
     const kind = kindM ? kindM[1] : 'unknown';
 
-    const typeM = body.match(TYPE_LIT_RE);
-    const subtypeM = body.match(SUBTYPE_LIT_RE);
+    const typeM = body.match(P.typeLitRe);
+    const subtypeM = body.match(P.subtypeLitRe);
 
     const describes: string[] = [];
-    for (const d of body.matchAll(DESC_RE)) {
+    for (const d of body.matchAll(P.descRe)) {
       // unescape \" \\ etc.
       describes.push(d[1].replace(/\\(.)/g, '$1'));
     }
@@ -342,7 +422,7 @@ function extract(binaryPath: string): Record<string, SchemaEntry> {
     // appear as first-class structural data on canonical.json (and schemas.json).
     // Non-string-literal enum bodies (e.g. v.enum(<ident>)) yield null; the
     // post-extract summary reports the count.
-    const enumValues = kind === 'enum' ? extractEnumValues(body) : null;
+    const enumValues = kind === 'enum' ? extractEnumValues(body, aliases) : null;
 
     schemas[ident] = {
       kind,
@@ -356,7 +436,7 @@ function extract(binaryPath: string): Record<string, SchemaEntry> {
     };
   }
 
-  return schemas;
+  return { schemas, aliases };
 }
 
 // ---------- inverted indexes ----------
@@ -376,12 +456,16 @@ function buildIndexes(schemas: Record<string, SchemaEntry>): Indexes {
 
 // ---------- union resolution ----------
 
-function resolveUnions(schemas: Record<string, SchemaEntry>): Record<string, string[]> {
+function resolveUnions(
+  schemas: Record<string, SchemaEntry>,
+  aliases: Aliases,
+): Record<string, string[]> {
   const out: Record<string, string[]> = {};
+  // body shape: ()=><zod>.union([X(),Y(),Z()]).<more> across any zod alias.
+  const unionRe = new RegExp(`${zodAlt(aliases)}\\.union\\(\\[(.*?)\\]\\)`, 's');
   for (const [id, s] of Object.entries(schemas)) {
     if (s.kind !== 'union') continue;
-    // body shape: ()=>v.union([X(),Y(),Z()]).<more>
-    const m = s.body.match(/v\.union\(\[(.*?)\]\)/s);
+    const m = s.body.match(unionRe);
     if (!m) continue;
     const members: string[] = [];
     for (const x of m[1].matchAll(UNION_MEMBER_RE)) {
@@ -502,23 +586,41 @@ interface CanonicalEntry {
  * Replace every minified-id-shaped reference with a placeholder so that
  * a body's hash depends only on its structural content, not on which
  * specific local names this build's minifier happened to assign.
+ *
+ * Two normalizations:
+ *   1. `<zodAlias>.<method>` → `__Z__.<method>` (so v.object and y.object hash equal)
+ *   2. `<ident>()` cross-refs → `__REF__()` (so minified-id refs cancel out)
  */
-function mangleBodyForHash(body: string): string {
-  // Replace `<ident>()` calls — the cross-reference form for lazy schemas.
-  return body.replace(/\b[A-Za-z_$][\w$]{0,30}\(\)/g, (m) => {
+function mangleBodyForHash(body: string, aliases: Aliases): string {
+  const zod = zodAlt(aliases);
+  let mangled = body.replace(
+    new RegExp(`\\b${zod}\\.`, 'g'),
+    '__Z__.',
+  );
+  mangled = mangled.replace(/\b[A-Za-z_$][\w$]{0,30}\(\)/g, (m) => {
     const ident = m.slice(0, -2);
     return IDENT_BLACKLIST.has(ident) ? m : '__REF__()';
   });
+  return mangled;
 }
 
-function extractFieldNames(body: string): string[] {
+function extractFieldNames(body: string, aliases: Aliases): string[] {
   // Only meaningful for v.object({...}). Pull top-level keys from the first
   // object literal at depth 1. We track brace depth and only collect keys
   // that appear at the outermost level.
-  const objStart = body.indexOf('v.object({');
+  let objStart = -1;
+  let head = '';
+  for (const z of aliases.zod) {
+    for (const variant of [`${z}.object({`, `${z}.strictObject({`, `${z}.looseObject({`]) {
+      const idx = body.indexOf(variant);
+      if (idx >= 0 && (objStart < 0 || idx < objStart)) {
+        objStart = idx;
+        head = variant.slice(0, variant.length - 1); // drop the trailing `{`
+      }
+    }
+  }
   if (objStart < 0) return [];
-  // 'v.object(' is 9 chars; `{` lands at objStart + 9.
-  const braceStart = objStart + 'v.object('.length;
+  const braceStart = objStart + head.length;
   if (body[braceStart] !== '{') return [];
   // scan keys at depth=1 (just inside the outer {})
   const keys: string[] = [];
@@ -571,19 +673,28 @@ function extractFieldNames(body: string): string[] {
 function canonicalize(
   schemas: Record<string, SchemaEntry>,
   unions: Record<string, string[]>,
+  aliases: Aliases,
 ): Record<string, CanonicalEntry> {
   const out: Record<string, CanonicalEntry> = {};
   for (const [id, s] of Object.entries(schemas)) {
     let key: string;
     let discriminant: CanonicalEntry['discriminant'];
-    if (s.subtypeLiteral) {
+    if (s.typeLiteral && s.subtypeLiteral) {
+      // Compound discriminant — the most specific kind. Two semantically
+      // distinct schemas can share a subtype literal (e.g. control_response
+      // `subtype:"success"` and the result-frame schema that also carries
+      // `subtype:"success"` under `type:"result"`). Folding them together
+      // produces field-drift false positives. Compound keys keep them apart.
+      key = `type/${s.typeLiteral}+subtype/${s.subtypeLiteral}`;
+      discriminant = { kind: 'subtype', value: s.subtypeLiteral };
+    } else if (s.subtypeLiteral) {
       key = `subtype/${s.subtypeLiteral}`;
       discriminant = { kind: 'subtype', value: s.subtypeLiteral };
     } else if (s.typeLiteral) {
       key = `type/${s.typeLiteral}`;
       discriminant = { kind: 'type', value: s.typeLiteral };
     } else {
-      const mangled = mangleBodyForHash(s.body);
+      const mangled = mangleBodyForHash(s.body, aliases);
       const hash = createHash('sha256').update(mangled).digest('hex').slice(0, 16);
       key = `anon/${hash}`;
       discriminant = { kind: 'anonymous', value: null };
@@ -596,16 +707,17 @@ function canonicalize(
       .map(m => {
         const ms = schemas[m];
         if (!ms) return null;
+        if (ms.typeLiteral && ms.subtypeLiteral) return `type/${ms.typeLiteral}+subtype/${ms.subtypeLiteral}`;
         if (ms.subtypeLiteral) return `subtype/${ms.subtypeLiteral}`;
         if (ms.typeLiteral) return `type/${ms.typeLiteral}`;
         // anon — hash its body too
-        const hash = createHash('sha256').update(mangleBodyForHash(ms.body)).digest('hex').slice(0, 16);
+        const hash = createHash('sha256').update(mangleBodyForHash(ms.body, aliases)).digest('hex').slice(0, 16);
         return `anon/${hash}`;
       })
       .filter((x): x is string => !!x)
       .sort();
 
-    const mangled = mangleBodyForHash(s.body);
+    const mangled = mangleBodyForHash(s.body, aliases);
     const bodyHash = createHash('sha256').update(mangled).digest('hex').slice(0, 16);
 
     // If the canonical key collides (e.g. two anon schemas with the same hash, or
@@ -620,7 +732,7 @@ function canonicalize(
       canonicalKey: resolvedKey,
       discriminant,
       schemaKind: s.kind,
-      fieldNames: extractFieldNames(s.body),
+      fieldNames: extractFieldNames(s.body, aliases),
       unionMemberDiscriminants: memberDiscs,
       describeSummary: s.describes[0]?.slice(0, 200) ?? null,
       bodyHash,
@@ -773,20 +885,21 @@ if (cmd === 'extract') {
   const size = statSync(binary).size;
   console.error(`reading ${binary} (${size.toLocaleString()} bytes)…`);
 
-  const schemas = extract(binary);
+  const { schemas, aliases } = extract(binary);
   const indexes = buildIndexes(schemas);
-  const unions = resolveUnions(schemas);
-  const canonical = canonicalize(schemas, unions);
+  const unions = resolveUnions(schemas, aliases);
+  const canonical = canonicalize(schemas, unions, aliases);
 
   writeFileSync(
     join(outDir, 'schemas.json'),
-    JSON.stringify({ binary, binarySize: size, schemaCount: Object.keys(schemas).length, indexes, schemas }, null, 2),
+    JSON.stringify({ binary, binarySize: size, aliases, schemaCount: Object.keys(schemas).length, indexes, schemas }, null, 2),
   );
   writeFileSync(
     join(outDir, 'canonical.json'),
     JSON.stringify({
       binary,
       binarySize: size,
+      aliases,
       schemaCount: Object.keys(canonical).length,
       schemas: canonical,
     }, null, 2),

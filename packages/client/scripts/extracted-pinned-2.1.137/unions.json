@@ -1,0 +1,1374 @@
+{
+  "Pr": {
+    "members": [
+      "RI6",
+      "aG4",
+      "sG4",
+      "tG4",
+      "eG4",
+      "HR4",
+      "_R4",
+      "qR4"
+    ],
+    "memberDiscriminants": [
+      {
+        "id": "RI6",
+        "type": "stdio",
+        "subtype": null,
+        "inferredName": "Stdio"
+      },
+      {
+        "id": "aG4",
+        "type": "sse",
+        "subtype": null,
+        "inferredName": "Sse"
+      },
+      {
+        "id": "sG4",
+        "type": "sse-ide",
+        "subtype": null,
+        "inferredName": "Sse-ide"
+      },
+      {
+        "id": "tG4",
+        "type": "ws-ide",
+        "subtype": null,
+        "inferredName": "Ws-ide"
+      },
+      {
+        "id": "eG4",
+        "type": null,
+        "subtype": null,
+        "inferredName": "Schema_eG4"
+      },
+      {
+        "id": "HR4",
+        "type": "ws",
+        "subtype": null,
+        "inferredName": "Ws"
+      },
+      {
+        "id": "_R4",
+        "type": "sdk",
+        "subtype": null,
+        "inferredName": "Sdk"
+      },
+      {
+        "id": "qR4",
+        "type": "claudeai-proxy",
+        "subtype": null,
+        "inferredName": "Claudeai-proxy"
+      }
+    ]
+  },
+  "YAq": {
+    "members": [
+      "Td"
+    ],
+    "memberDiscriminants": [
+      {
+        "id": "Td",
+        "type": null,
+        "subtype": null,
+        "inferredName": "Schema_Td"
+      }
+    ]
+  },
+  "VI6": {
+    "members": [
+      "kI6",
+      "Td"
+    ],
+    "memberDiscriminants": [
+      {
+        "id": "kI6",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "Td",
+        "type": null,
+        "subtype": null,
+        "inferredName": "Schema_Td"
+      }
+    ]
+  },
+  "PAq": {
+    "members": [
+      "Td",
+      "XAq",
+      "LI6",
+      "LI6",
+      "LI6"
+    ],
+    "memberDiscriminants": [
+      {
+        "id": "Td",
+        "type": null,
+        "subtype": null,
+        "inferredName": "Schema_Td"
+      },
+      {
+        "id": "XAq",
+        "type": null,
+        "subtype": null,
+        "inferredName": "Schema_XAq"
+      },
+      {
+        "id": "LI6",
+        "type": null,
+        "subtype": null,
+        "inferredName": "Schema_LI6"
+      },
+      {
+        "id": "LI6",
+        "type": null,
+        "subtype": null,
+        "inferredName": "Schema_LI6"
+      },
+      {
+        "id": "LI6",
+        "type": null,
+        "subtype": null,
+        "inferredName": "Schema_LI6"
+      }
+    ]
+  },
+  "ER4": {
+    "members": [
+      "loose"
+    ],
+    "memberDiscriminants": [
+      {
+        "id": "loose",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      }
+    ]
+  },
+  "tRO": {
+    "members": [
+      "F6_",
+      "g6_"
+    ],
+    "memberDiscriminants": [
+      {
+        "id": "F6_",
+        "type": null,
+        "subtype": null,
+        "inferredName": "SchemaVersion"
+      },
+      {
+        "id": "g6_",
+        "type": null,
+        "subtype": null,
+        "inferredName": "SchemaVersion"
+      }
+    ]
+  },
+  "Ts9": {
+    "members": [
+      "Pr"
+    ],
+    "memberDiscriminants": [
+      {
+        "id": "Pr",
+        "type": null,
+        "subtype": null,
+        "inferredName": "Schema_Pr"
+      }
+    ]
+  },
+  "LFA": {
+    "members": [
+      "Bq5",
+      "Uq5",
+      "Fq5"
+    ],
+    "memberDiscriminants": [
+      {
+        "id": "Bq5",
+        "type": "adaptive",
+        "subtype": null,
+        "inferredName": "Adaptive"
+      },
+      {
+        "id": "Uq5",
+        "type": "enabled",
+        "subtype": null,
+        "inferredName": "Enabled"
+      },
+      {
+        "id": "Fq5",
+        "type": "disabled",
+        "subtype": null,
+        "inferredName": "Disabled"
+      }
+    ]
+  },
+  "rH6": {
+    "members": [
+      "gq5",
+      "Qq5",
+      "dq5",
+      "cq5"
+    ],
+    "memberDiscriminants": [
+      {
+        "id": "gq5",
+        "type": "stdio",
+        "subtype": null,
+        "inferredName": "Stdio"
+      },
+      {
+        "id": "Qq5",
+        "type": "sse",
+        "subtype": null,
+        "inferredName": "Sse"
+      },
+      {
+        "id": "dq5",
+        "type": "http",
+        "subtype": null,
+        "inferredName": "Http"
+      },
+      {
+        "id": "cq5",
+        "type": "sdk",
+        "subtype": null,
+        "inferredName": "Sdk"
+      }
+    ]
+  },
+  "nq5": {
+    "members": [
+      "rH6",
+      "lq5"
+    ],
+    "memberDiscriminants": [
+      {
+        "id": "rH6",
+        "type": null,
+        "subtype": null,
+        "inferredName": "Schema_rH6"
+      },
+      {
+        "id": "lq5",
+        "type": "claudeai-proxy",
+        "subtype": null,
+        "inferredName": "Claudeai-proxy"
+      }
+    ]
+  },
+  "VFA": {
+    "members": [
+      "fz_",
+      "ae9",
+      "ae9"
+    ],
+    "memberDiscriminants": [
+      {
+        "id": "fz_",
+        "type": "addRules",
+        "subtype": null,
+        "inferredName": "AddRules"
+      },
+      {
+        "id": "ae9",
+        "type": null,
+        "subtype": null,
+        "inferredName": "ClassificationOfThisPermissionDecisionFor"
+      },
+      {
+        "id": "ae9",
+        "type": null,
+        "subtype": null,
+        "inferredName": "ClassificationOfThisPermissionDecisionFor"
+      }
+    ]
+  },
+  "HH7": {
+    "members": [
+      "oq5",
+      "sq5",
+      "tq5",
+      "H95",
+      "_95",
+      "q95",
+      "K95",
+      "O95",
+      "T95",
+      "E95",
+      "z95",
+      "Y95",
+      "w95",
+      "J95",
+      "j95",
+      "aq5",
+      "A95",
+      "D95",
+      "M95",
+      "f95",
+      "X95",
+      "P95",
+      "G95",
+      "L95",
+      "k95",
+      "V95",
+      "N95",
+      "v95"
+    ],
+    "memberDiscriminants": [
+      {
+        "id": "oq5",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "sq5",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "tq5",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "H95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "_95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "q95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "K95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "O95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "T95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "E95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "z95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "Y95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "w95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "J95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "j95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "aq5",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "A95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "D95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "M95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "f95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "X95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "P95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "G95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "L95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "k95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "V95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "N95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "v95",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      }
+    ]
+  },
+  "NFA": {
+    "members": [
+      "S95",
+      "l95"
+    ],
+    "memberDiscriminants": [
+      {
+        "id": "S95",
+        "type": null,
+        "subtype": null,
+        "inferredName": "Schema_S95"
+      },
+      {
+        "id": "l95",
+        "type": null,
+        "subtype": null,
+        "inferredName": "Schema_l95"
+      }
+    ]
+  },
+  "a95": {
+    "members": [
+      "rH6"
+    ],
+    "memberDiscriminants": [
+      {
+        "id": "rH6",
+        "type": null,
+        "subtype": null,
+        "inferredName": "Schema_rH6"
+      }
+    ]
+  },
+  "H75": {
+    "members": [],
+    "memberDiscriminants": []
+  },
+  "I$8": {
+    "members": [
+      "K75",
+      "h$8",
+      "_75",
+      "Y75",
+      "w75",
+      "J75",
+      "j75",
+      "M75",
+      "f75",
+      "X75",
+      "P75",
+      "W75",
+      "G75",
+      "R75",
+      "Z75",
+      "k75",
+      "V75",
+      "N75",
+      "h75",
+      "v75",
+      "y75",
+      "L75",
+      "E75",
+      "S75",
+      "O75",
+      "C75",
+      "I75",
+      "b75",
+      "D75"
+    ],
+    "memberDiscriminants": [
+      {
+        "id": "K75",
+        "type": "assistant",
+        "subtype": null,
+        "inferredName": "Assistant"
+      },
+      {
+        "id": "h$8",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "_75",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "Y75",
+        "type": "system",
+        "subtype": "init",
+        "inferredName": "InitRequest"
+      },
+      {
+        "id": "w75",
+        "type": "stream_event",
+        "subtype": null,
+        "inferredName": "StreamEvent"
+      },
+      {
+        "id": "J75",
+        "type": "system",
+        "subtype": "compact_boundary",
+        "inferredName": "CompactBoundaryRequest"
+      },
+      {
+        "id": "j75",
+        "type": "system",
+        "subtype": "status",
+        "inferredName": "StatusRequest"
+      },
+      {
+        "id": "M75",
+        "type": "system",
+        "subtype": "api_retry",
+        "inferredName": "ApiRetryRequest"
+      },
+      {
+        "id": "f75",
+        "type": "system",
+        "subtype": "local_command_output",
+        "inferredName": "LocalCommandOutputRequest"
+      },
+      {
+        "id": "X75",
+        "type": "system",
+        "subtype": "hook_started",
+        "inferredName": "HookStartedRequest"
+      },
+      {
+        "id": "P75",
+        "type": "system",
+        "subtype": "hook_progress",
+        "inferredName": "HookProgressRequest"
+      },
+      {
+        "id": "W75",
+        "type": "system",
+        "subtype": "hook_response",
+        "inferredName": "HookResponseRequest"
+      },
+      {
+        "id": "G75",
+        "type": "system",
+        "subtype": "plugin_install",
+        "inferredName": "PluginInstallRequest"
+      },
+      {
+        "id": "R75",
+        "type": "tool_progress",
+        "subtype": null,
+        "inferredName": "ToolProgress"
+      },
+      {
+        "id": "Z75",
+        "type": "auth_status",
+        "subtype": null,
+        "inferredName": "AuthStatus"
+      },
+      {
+        "id": "k75",
+        "type": "system",
+        "subtype": "task_notification",
+        "inferredName": "TaskNotificationRequest"
+      },
+      {
+        "id": "V75",
+        "type": "system",
+        "subtype": "task_started",
+        "inferredName": "TaskStartedRequest"
+      },
+      {
+        "id": "N75",
+        "type": "system",
+        "subtype": "task_updated",
+        "inferredName": "TaskUpdatedRequest"
+      },
+      {
+        "id": "h75",
+        "type": "system",
+        "subtype": "task_progress",
+        "inferredName": "TaskProgressRequest"
+      },
+      {
+        "id": "v75",
+        "type": "system",
+        "subtype": "session_state_changed",
+        "inferredName": "SessionStateChangedRequest"
+      },
+      {
+        "id": "y75",
+        "type": "system",
+        "subtype": "notification",
+        "inferredName": "NotificationRequest"
+      },
+      {
+        "id": "L75",
+        "type": "system",
+        "subtype": "files_persisted",
+        "inferredName": "FilesPersistedRequest"
+      },
+      {
+        "id": "E75",
+        "type": "tool_use_summary",
+        "subtype": null,
+        "inferredName": "ToolUseSummary"
+      },
+      {
+        "id": "S75",
+        "type": "system",
+        "subtype": "memory_recall",
+        "inferredName": "MemoryRecallRequest"
+      },
+      {
+        "id": "O75",
+        "type": "rate_limit_event",
+        "subtype": null,
+        "inferredName": "RateLimitEvent"
+      },
+      {
+        "id": "C75",
+        "type": "system",
+        "subtype": "elicitation_complete",
+        "inferredName": "ElicitationCompleteRequest"
+      },
+      {
+        "id": "I75",
+        "type": "system",
+        "subtype": "permission_denied",
+        "inferredName": "PermissionDeniedRequest"
+      },
+      {
+        "id": "b75",
+        "type": "prompt_suggestion",
+        "subtype": null,
+        "inferredName": "PromptSuggestion"
+      },
+      {
+        "id": "D75",
+        "type": "system",
+        "subtype": "mirror_error",
+        "inferredName": "MirrorErrorRequest"
+      }
+    ]
+  },
+  "De5": {
+    "members": [],
+    "memberDiscriminants": []
+  },
+  "Tew": {
+    "members": [
+      "jmK",
+      "hmK",
+      "EmK",
+      "QmK",
+      "pmK",
+      "UmK"
+    ],
+    "memberDiscriminants": [
+      {
+        "id": "jmK",
+        "type": null,
+        "subtype": "can_use_tool",
+        "inferredName": "CanUseToolRequest"
+      },
+      {
+        "id": "hmK",
+        "type": null,
+        "subtype": "hook_callback",
+        "inferredName": "HookCallbackRequest"
+      },
+      {
+        "id": "EmK",
+        "type": null,
+        "subtype": "mcp_message",
+        "inferredName": "McpMessageRequest"
+      },
+      {
+        "id": "QmK",
+        "type": null,
+        "subtype": "oauth_token_refresh",
+        "inferredName": "OauthTokenRefreshRequest"
+      },
+      {
+        "id": "pmK",
+        "type": null,
+        "subtype": "elicitation",
+        "inferredName": "ElicitationRequest"
+      },
+      {
+        "id": "UmK",
+        "type": null,
+        "subtype": "request_user_dialog",
+        "inferredName": "RequestUserDialogRequest"
+      }
+    ]
+  },
+  "Aew": {
+    "members": [
+      "JmK",
+      "wmK",
+      "DmK",
+      "MmK",
+      "fmK",
+      "XmK",
+      "PmK",
+      "WmK",
+      "RmK",
+      "ZmK",
+      "LmK",
+      "kmK",
+      "GmK",
+      "VmK",
+      "NmK",
+      "vmK",
+      "ymK",
+      "SmK",
+      "CmK",
+      "ImK",
+      "bmK",
+      "cmK",
+      "xmK",
+      "umK",
+      "mmK",
+      "gmK"
+    ],
+    "memberDiscriminants": [
+      {
+        "id": "JmK",
+        "type": null,
+        "subtype": "interrupt",
+        "inferredName": "InterruptRequest"
+      },
+      {
+        "id": "wmK",
+        "type": null,
+        "subtype": "initialize",
+        "inferredName": "InitializeRequest"
+      },
+      {
+        "id": "DmK",
+        "type": null,
+        "subtype": "set_permission_mode",
+        "inferredName": "SetPermissionModeRequest"
+      },
+      {
+        "id": "MmK",
+        "type": null,
+        "subtype": "set_model",
+        "inferredName": "SetModelRequest"
+      },
+      {
+        "id": "fmK",
+        "type": null,
+        "subtype": "set_max_thinking_tokens",
+        "inferredName": "SetMaxThinkingTokensRequest"
+      },
+      {
+        "id": "XmK",
+        "type": null,
+        "subtype": "rename_session",
+        "inferredName": "RenameSessionRequest"
+      },
+      {
+        "id": "PmK",
+        "type": null,
+        "subtype": "set_color",
+        "inferredName": "SetColorRequest"
+      },
+      {
+        "id": "WmK",
+        "type": null,
+        "subtype": "mcp_status",
+        "inferredName": "McpStatusRequest"
+      },
+      {
+        "id": "RmK",
+        "type": null,
+        "subtype": "get_context_usage",
+        "inferredName": "GetContextUsageRequest"
+      },
+      {
+        "id": "ZmK",
+        "type": null,
+        "subtype": "get_session_cost",
+        "inferredName": "GetSessionCostRequest"
+      },
+      {
+        "id": "LmK",
+        "type": null,
+        "subtype": "get_binary_version",
+        "inferredName": "GetBinaryVersionRequest"
+      },
+      {
+        "id": "kmK",
+        "type": null,
+        "subtype": "mcp_call",
+        "inferredName": "McpCallRequest"
+      },
+      {
+        "id": "GmK",
+        "type": null,
+        "subtype": "file_suggestions",
+        "inferredName": "FileSuggestionsRequest"
+      },
+      {
+        "id": "VmK",
+        "type": null,
+        "subtype": "rewind_files",
+        "inferredName": "RewindFilesRequest"
+      },
+      {
+        "id": "NmK",
+        "type": null,
+        "subtype": "cancel_async_message",
+        "inferredName": "CancelAsyncMessageRequest"
+      },
+      {
+        "id": "vmK",
+        "type": null,
+        "subtype": "read_file",
+        "inferredName": "ReadFileRequest"
+      },
+      {
+        "id": "ymK",
+        "type": null,
+        "subtype": "seed_read_state",
+        "inferredName": "SeedReadStateRequest"
+      },
+      {
+        "id": "SmK",
+        "type": null,
+        "subtype": "mcp_set_servers",
+        "inferredName": "McpSetServersRequest"
+      },
+      {
+        "id": "CmK",
+        "type": null,
+        "subtype": "reload_plugins",
+        "inferredName": "ReloadPluginsRequest"
+      },
+      {
+        "id": "ImK",
+        "type": null,
+        "subtype": "mcp_reconnect",
+        "inferredName": "McpReconnectRequest"
+      },
+      {
+        "id": "bmK",
+        "type": null,
+        "subtype": "mcp_toggle",
+        "inferredName": "McpToggleRequest"
+      },
+      {
+        "id": "cmK",
+        "type": null,
+        "subtype": "message_rated",
+        "inferredName": "MessageRatedRequest"
+      },
+      {
+        "id": "xmK",
+        "type": null,
+        "subtype": "stop_task",
+        "inferredName": "StopTaskRequest"
+      },
+      {
+        "id": "umK",
+        "type": null,
+        "subtype": "apply_flag_settings",
+        "inferredName": "ApplyFlagSettingsRequest"
+      },
+      {
+        "id": "mmK",
+        "type": null,
+        "subtype": "get_settings",
+        "inferredName": "GetSettingsRequest"
+      },
+      {
+        "id": "gmK",
+        "type": null,
+        "subtype": "submit_feedback",
+        "inferredName": "SubmitFeedbackRequest"
+      }
+    ]
+  },
+  "rF3": {
+    "members": [
+      "JmK",
+      "jmK",
+      "wmK",
+      "DmK",
+      "MmK",
+      "fmK",
+      "XmK",
+      "PmK",
+      "WmK",
+      "RmK",
+      "ZmK",
+      "LmK",
+      "kmK",
+      "GmK",
+      "hmK",
+      "EmK",
+      "VmK",
+      "NmK",
+      "vmK",
+      "ymK",
+      "SmK",
+      "CmK",
+      "ImK",
+      "bmK",
+      "cmK",
+      "QmK",
+      "xmK",
+      "umK",
+      "mmK",
+      "pmK",
+      "UmK",
+      "gmK"
+    ],
+    "memberDiscriminants": [
+      {
+        "id": "JmK",
+        "type": null,
+        "subtype": "interrupt",
+        "inferredName": "InterruptRequest"
+      },
+      {
+        "id": "jmK",
+        "type": null,
+        "subtype": "can_use_tool",
+        "inferredName": "CanUseToolRequest"
+      },
+      {
+        "id": "wmK",
+        "type": null,
+        "subtype": "initialize",
+        "inferredName": "InitializeRequest"
+      },
+      {
+        "id": "DmK",
+        "type": null,
+        "subtype": "set_permission_mode",
+        "inferredName": "SetPermissionModeRequest"
+      },
+      {
+        "id": "MmK",
+        "type": null,
+        "subtype": "set_model",
+        "inferredName": "SetModelRequest"
+      },
+      {
+        "id": "fmK",
+        "type": null,
+        "subtype": "set_max_thinking_tokens",
+        "inferredName": "SetMaxThinkingTokensRequest"
+      },
+      {
+        "id": "XmK",
+        "type": null,
+        "subtype": "rename_session",
+        "inferredName": "RenameSessionRequest"
+      },
+      {
+        "id": "PmK",
+        "type": null,
+        "subtype": "set_color",
+        "inferredName": "SetColorRequest"
+      },
+      {
+        "id": "WmK",
+        "type": null,
+        "subtype": "mcp_status",
+        "inferredName": "McpStatusRequest"
+      },
+      {
+        "id": "RmK",
+        "type": null,
+        "subtype": "get_context_usage",
+        "inferredName": "GetContextUsageRequest"
+      },
+      {
+        "id": "ZmK",
+        "type": null,
+        "subtype": "get_session_cost",
+        "inferredName": "GetSessionCostRequest"
+      },
+      {
+        "id": "LmK",
+        "type": null,
+        "subtype": "get_binary_version",
+        "inferredName": "GetBinaryVersionRequest"
+      },
+      {
+        "id": "kmK",
+        "type": null,
+        "subtype": "mcp_call",
+        "inferredName": "McpCallRequest"
+      },
+      {
+        "id": "GmK",
+        "type": null,
+        "subtype": "file_suggestions",
+        "inferredName": "FileSuggestionsRequest"
+      },
+      {
+        "id": "hmK",
+        "type": null,
+        "subtype": "hook_callback",
+        "inferredName": "HookCallbackRequest"
+      },
+      {
+        "id": "EmK",
+        "type": null,
+        "subtype": "mcp_message",
+        "inferredName": "McpMessageRequest"
+      },
+      {
+        "id": "VmK",
+        "type": null,
+        "subtype": "rewind_files",
+        "inferredName": "RewindFilesRequest"
+      },
+      {
+        "id": "NmK",
+        "type": null,
+        "subtype": "cancel_async_message",
+        "inferredName": "CancelAsyncMessageRequest"
+      },
+      {
+        "id": "vmK",
+        "type": null,
+        "subtype": "read_file",
+        "inferredName": "ReadFileRequest"
+      },
+      {
+        "id": "ymK",
+        "type": null,
+        "subtype": "seed_read_state",
+        "inferredName": "SeedReadStateRequest"
+      },
+      {
+        "id": "SmK",
+        "type": null,
+        "subtype": "mcp_set_servers",
+        "inferredName": "McpSetServersRequest"
+      },
+      {
+        "id": "CmK",
+        "type": null,
+        "subtype": "reload_plugins",
+        "inferredName": "ReloadPluginsRequest"
+      },
+      {
+        "id": "ImK",
+        "type": null,
+        "subtype": "mcp_reconnect",
+        "inferredName": "McpReconnectRequest"
+      },
+      {
+        "id": "bmK",
+        "type": null,
+        "subtype": "mcp_toggle",
+        "inferredName": "McpToggleRequest"
+      },
+      {
+        "id": "cmK",
+        "type": null,
+        "subtype": "message_rated",
+        "inferredName": "MessageRatedRequest"
+      },
+      {
+        "id": "QmK",
+        "type": null,
+        "subtype": "oauth_token_refresh",
+        "inferredName": "OauthTokenRefreshRequest"
+      },
+      {
+        "id": "xmK",
+        "type": null,
+        "subtype": "stop_task",
+        "inferredName": "StopTaskRequest"
+      },
+      {
+        "id": "umK",
+        "type": null,
+        "subtype": "apply_flag_settings",
+        "inferredName": "ApplyFlagSettingsRequest"
+      },
+      {
+        "id": "mmK",
+        "type": null,
+        "subtype": "get_settings",
+        "inferredName": "GetSettingsRequest"
+      },
+      {
+        "id": "pmK",
+        "type": null,
+        "subtype": "elicitation",
+        "inferredName": "ElicitationRequest"
+      },
+      {
+        "id": "UmK",
+        "type": null,
+        "subtype": "request_user_dialog",
+        "inferredName": "RequestUserDialogRequest"
+      },
+      {
+        "id": "gmK",
+        "type": null,
+        "subtype": "submit_feedback",
+        "inferredName": "SubmitFeedbackRequest"
+      }
+    ]
+  },
+  "zew": {
+    "members": [
+      "I$8",
+      "E$8",
+      "S$8",
+      "C$8"
+    ],
+    "memberDiscriminants": [
+      {
+        "id": "I$8",
+        "type": null,
+        "subtype": null,
+        "inferredName": "Schema_I$8"
+      },
+      {
+        "id": "E$8",
+        "type": "system",
+        "subtype": "post_turn_summary",
+        "inferredName": "PostTurnSummaryRequest"
+      },
+      {
+        "id": "S$8",
+        "type": "system",
+        "subtype": "task_summary",
+        "inferredName": "TaskSummaryRequest"
+      },
+      {
+        "id": "C$8",
+        "type": "transcript_mirror",
+        "subtype": null,
+        "inferredName": "TranscriptMirror"
+      }
+    ]
+  },
+  "imK": {
+    "members": [
+      "I$8",
+      "E$8",
+      "S$8",
+      "C$8",
+      "lmK",
+      "fQ8",
+      "sF3",
+      "nmK"
+    ],
+    "memberDiscriminants": [
+      {
+        "id": "I$8",
+        "type": null,
+        "subtype": null,
+        "inferredName": "Schema_I$8"
+      },
+      {
+        "id": "E$8",
+        "type": "system",
+        "subtype": "post_turn_summary",
+        "inferredName": "PostTurnSummaryRequest"
+      },
+      {
+        "id": "S$8",
+        "type": "system",
+        "subtype": "task_summary",
+        "inferredName": "TaskSummaryRequest"
+      },
+      {
+        "id": "C$8",
+        "type": "transcript_mirror",
+        "subtype": null,
+        "inferredName": "TranscriptMirror"
+      },
+      {
+        "id": "lmK",
+        "type": "control_response",
+        "subtype": null,
+        "inferredName": "ControlResponse"
+      },
+      {
+        "id": "fQ8",
+        "type": "control_request",
+        "subtype": null,
+        "inferredName": "ControlRequest"
+      },
+      {
+        "id": "sF3",
+        "type": "control_cancel_request",
+        "subtype": null,
+        "inferredName": "ControlCancelRequest"
+      },
+      {
+        "id": "nmK",
+        "type": "keep_alive",
+        "subtype": null,
+        "inferredName": "KeepAlive"
+      }
+    ]
+  },
+  "ew": {
+    "members": [
+      "h$8",
+      "AH7",
+      "fQ8",
+      "lmK",
+      "nmK",
+      "tF3"
+    ],
+    "memberDiscriminants": [
+      {
+        "id": "h$8",
+        "type": null,
+        "subtype": null,
+        "inferredName": null
+      },
+      {
+        "id": "AH7",
+        "type": "bash_command",
+        "subtype": null,
+        "inferredName": "BashCommand"
+      },
+      {
+        "id": "fQ8",
+        "type": "control_request",
+        "subtype": null,
+        "inferredName": "ControlRequest"
+      },
+      {
+        "id": "lmK",
+        "type": "control_response",
+        "subtype": null,
+        "inferredName": "ControlResponse"
+      },
+      {
+        "id": "nmK",
+        "type": "keep_alive",
+        "subtype": null,
+        "inferredName": "KeepAlive"
+      },
+      {
+        "id": "tF3",
+        "type": "update_environment_variables",
+        "subtype": null,
+        "inferredName": "UpdateEnvironmentVariables"
+      }
+    ]
+  },
+  "g0_": {
+    "members": [
+      "_g3",
+      "qg3"
+    ],
+    "memberDiscriminants": [
+      {
+        "id": "_g3",
+        "type": null,
+        "subtype": null,
+        "inferredName": "Schema__g3"
+      },
+      {
+        "id": "qg3",
+        "type": null,
+        "subtype": null,
+        "inferredName": "Schema_qg3"
+      }
+    ]
+  }
+}
