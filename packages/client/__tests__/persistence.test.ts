@@ -1,6 +1,7 @@
 import { describe, test, expect } from "bun:test";
-import { createTestSession, createMemoryStorage, createFakeWsClient, flush } from "./helpers";
-import type { MessageEntry } from "../src/messages";
+import { createTestSession, createMemoryStorage, createFakeTransport, flush } from "./helpers";
+import type { MessageEntry } from "../src/index";
+import { createCcSession } from "../src/index";
 
 const KEY = "cc-ws-session";
 
@@ -230,12 +231,11 @@ describe("opt-out + customization", () => {
     // Build the session with persistence explicitly disabled and a fake ws.
     // We bypass createTestSession's `storage` shorthand (which forces
     // persistence) and pass persistence:false directly.
-    const ws = createFakeWsClient();
-    const { createCcSession } = await import("../src/session");
+    const ws = createFakeTransport();
     const session = createCcSession({
       url: "ws://test/",
       persistence: false,
-      wsClient: ws,
+      testTransport: { transport: ws, status: ws.status, lastError: ws.lastError },
     });
 
     expect(session.atoms.messages.get()).toEqual([]);
@@ -250,12 +250,11 @@ describe("opt-out + customization", () => {
   test("custom key is honored", async () => {
     const storage = createMemoryStorage();
     const customKey = "my-session-key";
-    const ws = createFakeWsClient();
-    const { createCcSession } = await import("../src/session");
+    const ws = createFakeTransport();
     const session = createCcSession({
       url: "ws://test/",
       persistence: { storage, key: customKey },
-      wsClient: ws,
+      testTransport: { transport: ws, status: ws.status, lastError: ws.lastError },
     });
     await waitForDebounce();
     storage.setItemCalls.length = 0;
@@ -269,12 +268,11 @@ describe("opt-out + customization", () => {
 
   test("custom storage is used (no localStorage)", async () => {
     const storage = createMemoryStorage();
-    const ws = createFakeWsClient();
-    const { createCcSession } = await import("../src/session");
+    const ws = createFakeTransport();
     const session = createCcSession({
       url: "ws://test/",
       persistence: { storage },
-      wsClient: ws,
+      testTransport: { transport: ws, status: ws.status, lastError: ws.lastError },
     });
     await waitForDebounce();
     storage.setItemCalls.length = 0;

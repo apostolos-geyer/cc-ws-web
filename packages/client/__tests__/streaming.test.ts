@@ -1,6 +1,6 @@
-import { describe, test, expect, beforeEach, mock, spyOn } from "bun:test";
+import { describe, test, expect, beforeEach, spyOn } from "bun:test";
 import { createTestSession, type TestSession } from "./helpers";
-import type { StreamingEntry, FrameEntry, ToolUseBlock, TextBlock, ThinkingBlock } from "../src/messages";
+import type { StreamingEntry, FrameEntry, ToolUseBlock, TextBlock, ThinkingBlock } from "../src/index";
 
 let h: TestSession;
 

@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "../..",
+    "baseUrl": ".."
+  },
+  "include": [
+    "src/**/*",
+    "generated/**/*",
+    "__tests__/**/*",
+    "../../codegen/version.ts"
+  ]
+}

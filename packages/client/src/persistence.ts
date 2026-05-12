@@ -2,9 +2,9 @@
 // prior turns over stream-json, so without local persistence a refresh
 // lands on an empty bubble list.
 
-import type { MessagesController, MessageEntry } from "./messages";
-import type { Effort, PermissionMode } from "./modes";
 import type { ReadableAtom } from "nanostores";
+import type { MessageEntry } from "@somewhatintelligent/cc-protocol/client";
+import type { Effort, PermissionMode } from "./modes";
 
 export type StorageLike = {
   getItem: (key: string) => string | null;
@@ -79,25 +79,27 @@ export function savePersisted(cfg: PersistenceConfig, payload: PersistedShape): 
   }
 }
 
-// Subscribe to messagesCtrl.revision (bumps only on non-streaming changes),
-// not `messages` directly — otherwise every streaming token kicks the
-// 250ms timer to re-serialize a timeline that the streaming-entry filter
-// in savePersisted would discard anyway.
-export function installPersistenceWriter(args: {
+// Subscribe to a revision atom (bumps only on non-streaming changes) so
+// streaming tokens don't kick the debounce timer.
+export interface PersistenceWriterArgs {
   persistence: PersistenceConfig;
-  init: ReadableAtom<{ sessionId: string | null }>;
-  messagesCtrl: MessagesController;
+  sessionId: ReadableAtom<string | null>;
+  messages: ReadableAtom<MessageEntry[]>;
+  /** Bumps when `messages` changes in a save-worthy way (frame add / clear / hydrate). */
+  messagesRevision: ReadableAtom<number>;
   activeMode: ReadableAtom<PermissionMode>;
   activeModel: ReadableAtom<string>;
   activeEffort: ReadableAtom<Effort | "">;
-}) {
-  const { persistence, init, messagesCtrl, activeMode, activeModel, activeEffort } = args;
+}
+
+export function installPersistenceWriter(args: PersistenceWriterArgs): void {
+  const { persistence, sessionId, messages, messagesRevision, activeMode, activeModel, activeEffort } = args;
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
   const flush = () => {
     saveTimer = null;
     savePersisted(persistence, {
-      sessionId: init.get().sessionId,
-      messages: messagesCtrl.messages.get(),
+      sessionId: sessionId.get(),
+      messages: messages.get(),
       permissionMode: activeMode.get(),
       model: activeModel.get() || undefined,
       effort: activeEffort.get() || undefined,
@@ -107,8 +109,8 @@ export function installPersistenceWriter(args: {
     if (saveTimer != null) return;
     saveTimer = setTimeout(flush, 250);
   };
-  init.subscribe(schedule);
-  messagesCtrl.revision.subscribe(schedule);
+  sessionId.subscribe(schedule);
+  messagesRevision.subscribe(schedule);
   activeMode.subscribe(schedule);
   activeModel.subscribe(schedule);
   activeEffort.subscribe(schedule);
