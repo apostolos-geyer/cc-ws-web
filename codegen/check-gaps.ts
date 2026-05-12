@@ -103,15 +103,27 @@ const INTERNAL_PROTOCOL_LITERALS = new Set<string>([
 ]);
 
 /**
- * Snake-case quoted string literals in the source. Catches both
- * `subtype: "X"` discriminator positions and `type Foo = "X" | "Y"` union-
- * alias positions, which is what we need — the typed protocol uses both
- * styles for wire-format identifiers.
+ * Snake- and camel-case quoted string literals in the source. Catches:
+ *
+ *   "X"                       (double-quoted)
+ *   'X'                       (single-quoted)
+ *   '\'X\''                   (escaped-single, as the codegen emits when an
+ *                              arktype literal expression is embedded inside
+ *                              a single-quoted JS string)
+ *
+ * Generated arktype schemas use the third form everywhere — `'subtype':
+ * '\'initialize\''` — so the check would otherwise miss every wire literal
+ * in the generated file. We tolerate camelCase identifiers (e.g. wire
+ * literal `addRules` / `setMode`) by allowing an uppercase letter past the
+ * first position.
  */
 function protocolLiterals(source: string): Set<string> {
-  const re = /"([a-z][a-z0-9_-]*)"/g;
+  const re = /[a-z][a-zA-Z0-9_-]*/.source;
   const out = new Set<string>();
-  for (const m of source.matchAll(re)) out.add(m[1]);
+  for (const m of source.matchAll(new RegExp(`"(${re})"`, "g"))) out.add(m[1]);
+  for (const m of source.matchAll(new RegExp(`'(${re})'`, "g"))) out.add(m[1]);
+  // Escaped-single form: `'\''X\''` → captures `X`.
+  for (const m of source.matchAll(new RegExp(`\\\\'(${re})\\\\'`, "g"))) out.add(m[1]);
   return out;
 }
 
@@ -245,6 +257,15 @@ const report: Report = {
 };
 
 process.stdout.write(render(report));
-const hasHardGap =
-  missingSub.length + missingType.length + staleSub.length + staleType.length > 0;
+// Phase 2 update: the "stale" signal is informational only against the
+// codegen-emitted schemas.ts, because every enum member and field-name
+// literal in the file would otherwise show up as "stale" (they're not
+// discriminator literals on the wire). The hard gate is `missing*` —
+// every binary-emitted discriminant must show up in the generated file.
+const hasHardGap = missingSub.length + missingType.length > 0;
+if (staleSub.length + staleType.length > 0) {
+  process.stderr.write(
+    `[check-gaps] note: ${staleSub.length + staleType.length} string literals in target don't match any binary discriminator (likely field values / enum members — not a structural gap). Hard gate ignores these.\n`,
+  );
+}
 process.exit(hasHardGap ? 2 : 0);

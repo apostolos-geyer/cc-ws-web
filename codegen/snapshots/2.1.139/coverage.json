@@ -1,0 +1,1403 @@
+{
+  "version": "2.1.139",
+  "patchesApplied": 47,
+  "schemas": {
+    "total": 949,
+    "fields": {
+      "total": 2553,
+      "typed": 2255,
+      "unknown": 298
+    },
+    "discriminantKeyed": {
+      "total": 132,
+      "fullyTyped": 123
+    }
+  },
+  "unknownFields": [
+    {
+      "schema": "HttpMessage",
+      "field": "if",
+      "rhs": "I8_()"
+    },
+    {
+      "schema": "AnonB946fa776c1903c4",
+      "field": "callbackPort",
+      "rhs": "y.number().int().positive().optional()"
+    },
+    {
+      "schema": "AnonB946fa776c1903c4",
+      "field": "authServerMetadataUrl",
+      "rhs": "y.string().url().startsWith(\"https://\",{message:\"authServerMetadataUrl must use https://\"}).optional()"
+    },
+    {
+      "schema": "AnonB946fa776c1903c4",
+      "field": "xaa",
+      "rhs": "nL4().optional()"
+    },
+    {
+      "schema": "AgentDefinition",
+      "field": "maxTurns",
+      "rhs": "y.number().int().positive().optional().describe(\"Maximum number of agentic turns (API round-trips) before stopping\")"
+    },
+    {
+      "schema": "AgentDefinition",
+      "field": "effort",
+      "rhs": "y.union([y.enum([\"low\",\"medium\",\"high\",\"xhigh\",\"max\"]),y.number().int()]).optional().describe(\"Reasoning effort level for this agent. Either a named level or an integer\")"
+    },
+    {
+      "schema": "AgentMessage",
+      "field": "if",
+      "rhs": "I8_()"
+    },
+    {
+      "schema": "Anon01c58946e424ec3e",
+      "field": "line",
+      "rhs": "y.number().int().positive().describe(\"The line number (1-based, as shown in editors)\")"
+    },
+    {
+      "schema": "Anon01c58946e424ec3e",
+      "field": "character",
+      "rhs": "y.number().int().positive().describe(\"The character offset (1-based, as shown in editors)\")"
+    },
+    {
+      "schema": "Anon01d73e84e616b1f7",
+      "field": "expires_in",
+      "rhs": "y.coerce.number().optional()"
+    },
+    {
+      "schema": "Anon08b4e8085ff79b43",
+      "field": "plugins",
+      "rhs": "y.record(TS_(),yk4()).describe(\"Map of plugin IDs to their installation metadata\")"
+    },
+    {
+      "schema": "Anon0907d075be36d518",
+      "field": "command",
+      "rhs": "y.string().min(1).refine((H)=>{if(H.includes(\" \")&&!H.startsWith(\"/\"))return!1;return!0},{message:\"Command should not contain spaces. Use args array for arguments.\"}).describe('Command to execute the LSP server (e.g., \"typescript-language-server\")')"
+    },
+    {
+      "schema": "Anon0907d075be36d518",
+      "field": "args",
+      "rhs": "y.array(A$q()).optional().describe(\"Command-line arguments to pass to the server\")"
+    },
+    {
+      "schema": "Anon0907d075be36d518",
+      "field": "extensionToLanguage",
+      "rhs": "y.record(Mk4(),A$q()).refine((H)=>Object.keys(H).length>0,{message:\"extensionToLanguage must have at least one mapping\"}).describe(\"Mapping from file extension to LSP language ID. File extensions and languages are derived from this mapping.\")"
+    },
+    {
+      "schema": "Anon0907d075be36d518",
+      "field": "startupTimeout",
+      "rhs": "y.number().int().positive().optional().describe(\"Maximum time to wait for server startup (milliseconds)\")"
+    },
+    {
+      "schema": "Anon0907d075be36d518",
+      "field": "shutdownTimeout",
+      "rhs": "y.number().int().positive().optional().describe(\"Maximum time to wait for graceful shutdown (milliseconds)\")"
+    },
+    {
+      "schema": "Anon0907d075be36d518",
+      "field": "maxRestarts",
+      "rhs": "y.number().int().nonnegative().optional().describe(\"Maximum number of restart attempts before giving up\")"
+    },
+    {
+      "schema": "Anon0beb52c2780d0da9",
+      "field": "replace_all",
+      "rhs": "W0(y.boolean().default(!1).optional()).describe(\"Replace all occurrences of old_string (default false)\")"
+    },
+    {
+      "schema": "Anon0c8654c98c02fa9f",
+      "field": "eventData",
+      "rhs": "y.object({}).passthrough()"
+    },
+    {
+      "schema": "Anon0c8654c98c02fa9f2",
+      "field": "eventData",
+      "rhs": "y.object({}).passthrough()"
+    },
+    {
+      "schema": "Anon1076740198fcfca9",
+      "field": "options",
+      "rhs": "y.array($i5()).min(2).max(4).describe(\"The available choices for this question. Must have 2-4 options. Each option should be a distinct, mutually exclusive choice (unless multiSelect is enabled). There should be no 'Other' option, that will be provided automatically.\")"
+    },
+    {
+      "schema": "Anon10d9d4216f23efa0",
+      "field": "capacity",
+      "rhs": "y.number().int().positive().default(32)"
+    },
+    {
+      "schema": "Anon10d9d4216f23efa0",
+      "field": "permissionMode",
+      "rhs": "y.enum(Ur).optional()"
+    },
+    {
+      "schema": "Anon10d9d4216f23efa0",
+      "field": "sessionTimeoutSeconds",
+      "rhs": "y.number().int().positive().optional()"
+    },
+    {
+      "schema": "Anon11548354fbc81525",
+      "field": "proto",
+      "rhs": "_"
+    },
+    {
+      "schema": "Anon11548354fbc81525",
+      "field": "short",
+      "rhs": "H"
+    },
+    {
+      "schema": "Anon13c8729b6b01f422",
+      "field": "refreshIntervalMs",
+      "rhs": "y.union([y.literal(0),y.number().int().min(60000)]).optional()"
+    },
+    {
+      "schema": "Anon15588d2e10428e81",
+      "field": "status",
+      "rhs": "$ZH()"
+    },
+    {
+      "schema": "Anon1626a6590402bc78",
+      "field": "block",
+      "rhs": "W0(y.boolean().default(!0)).describe(\"Whether to wait for completion\")"
+    },
+    {
+      "schema": "Anon1626a6590402bc78",
+      "field": "timeout",
+      "rhs": "y.number().min(0).max(600000).default(30000).describe(\"Max wait time in ms\")"
+    },
+    {
+      "schema": "Anon165e4c275ccf2503",
+      "field": "package",
+      "rhs": "j$q().describe(\"NPM package containing marketplace.json\")"
+    },
+    {
+      "schema": "Anon16bf6e5e8f5a3779",
+      "field": "sha",
+      "rhs": "gb6().optional().describe(\"Specific commit SHA to use\")"
+    },
+    {
+      "schema": "Anon1b36f388d40e5168",
+      "field": "context",
+      "rhs": "iI(y.number().optional()).describe('Number of lines to show before and after each match (rg -C). Requires output_mode: \"content\", ignored otherwise.')"
+    },
+    {
+      "schema": "Anon1b36f388d40e5168",
+      "field": "head_limit",
+      "rhs": "iI(y.number().optional()).describe('Limit output to first N lines/entries, equivalent to \"| head -N\". Works across all output modes: content (limits output lines), files_with_matches (limits file paths), count (limits count entries). Defaults to 250 when unspecified. Pass 0 for unlimited (use sparingly \\u2014 large result sets waste context).')"
+    },
+    {
+      "schema": "Anon1b36f388d40e5168",
+      "field": "offset",
+      "rhs": "iI(y.number().optional()).describe('Skip first N lines/entries before applying head_limit, equivalent to \"| tail -n +N | head -N\". Works across all output modes. Defaults to 0.')"
+    },
+    {
+      "schema": "Anon1b36f388d40e5168",
+      "field": "multiline",
+      "rhs": "W0(y.boolean().optional()).describe(\"Enable multiline mode where . matches newlines and patterns can span lines (rg -U --multiline-dotall). Default: false.\")"
+    },
+    {
+      "schema": "Anon21ab9f5207855c63",
+      "field": "id",
+      "rhs": "y.coerce.string()"
+    },
+    {
+      "schema": "Anon21ab9f5207855c63",
+      "field": "cron_expression",
+      "rhs": "H"
+    },
+    {
+      "schema": "Anon21ab9f5207855c63",
+      "field": "run_once_at",
+      "rhs": "H"
+    },
+    {
+      "schema": "Anon2675585f2ab80dd1",
+      "field": "expires_in",
+      "rhs": "y.coerce.number().optional()"
+    },
+    {
+      "schema": "Anon277eb61db3101535",
+      "field": "themes",
+      "rhs": "y.union([Zd().describe(\"Path to additional themes directory or file (in addition to those in the themes/ directory, if it exists), relative to the plugin root\"),y.array(Zd().describe(\"Path to additional themes directory or file (in addition to those in the themes/ directory, if it exists), relative to the plugin root\")).describe(\"List of paths to additional themes directories or files\")])"
+    },
+    {
+      "schema": "Anon2a2225de025a130e",
+      "field": "details",
+      "rhs": "y.object({error_code:y.literal(\"team_memory_too_many_entries\"),max_entries:y.number().int().positive(),received_entries:y.number().int().positive()})"
+    },
+    {
+      "schema": "Anon2c713f269a9b7a63",
+      "field": "package",
+      "rhs": "j$q().or(y.string().refine((H)=>/^(?:file|https?|git(?:\\+https?|\\+ssh)?|ssh|github|gitlab|bitbucket):/i.test(H)||!H.includes(\"..\"),'Package reference cannot contain \"..\" path segments')).describe(\"Package name (or url, or local path, or anything else that can be passed to `npm` as a package)\")"
+    },
+    {
+      "schema": "Anon3088fcb0441bc9bf",
+      "field": "error",
+      "rhs": "y.object({details:y.object({error_code:y.literal(\"team_memory_too_many_entries\"),max_entries:y.number().int().positive(),received_entries:y.number().int().positive()})})"
+    },
+    {
+      "schema": "Anon3422037b4562b721",
+      "field": "name",
+      "rhs": "TP().describe(\"Agent identifier. Required \\u2014 this is how the Agent tool and `--agent` flag address it.\")"
+    },
+    {
+      "schema": "Anon3422037b4562b721",
+      "field": "description",
+      "rhs": "TP().describe(\"When to use this agent. Required \\u2014 shown in the Agent tool listing.\")"
+    },
+    {
+      "schema": "Anon3422037b4562b721",
+      "field": "model",
+      "rhs": "TP().optional().describe(\"Model override for this agent. Use `inherit` to match the spawning conversation.\")"
+    },
+    {
+      "schema": "Anon3422037b4562b721",
+      "field": "tools",
+      "rhs": "KBH().optional().describe(\"Tools available to this agent. Replaces the default set.\")"
+    },
+    {
+      "schema": "Anon3422037b4562b721",
+      "field": "disallowedTools",
+      "rhs": "KBH().optional().describe(\"Tools removed from the default set. Ignored if `tools` is set.\")"
+    },
+    {
+      "schema": "Anon3422037b4562b721",
+      "field": "color",
+      "rhs": "TP().optional().describe(\"@internal \\u2014 display color in the agents UI\")"
+    },
+    {
+      "schema": "Anon3422037b4562b721",
+      "field": "effort",
+      "rhs": "TP().optional().describe(\"Thinking effort: `low`, `medium`, `high`, `max`, or an integer.\")"
+    },
+    {
+      "schema": "Anon3422037b4562b721",
+      "field": "permissionMode",
+      "rhs": "TP().optional().describe(\"Permission mode the agent runs in.\")"
+    },
+    {
+      "schema": "Anon3422037b4562b721",
+      "field": "skills",
+      "rhs": "KBH().optional().describe(\"Skills preloaded for this agent.\")"
+    },
+    {
+      "schema": "Anon3422037b4562b721",
+      "field": "initialPrompt",
+      "rhs": "TP().optional().describe(\"Auto-submitted first message when this agent runs as the main session (via `--agent` or settings). Not read when spawned as a subagent.\")"
+    },
+    {
+      "schema": "Anon3422037b4562b721",
+      "field": "memory",
+      "rhs": "TP().optional().describe(\"Memory scope: `user`, `project`, or `local`.\")"
+    },
+    {
+      "schema": "Anon3422037b4562b721",
+      "field": "background",
+      "rhs": "kO_().optional().describe(\"If true, the agent runs in the background by default.\")"
+    },
+    {
+      "schema": "Anon3422037b4562b721",
+      "field": "isolation",
+      "rhs": "TP().optional().describe(\"Filesystem isolation: `worktree` runs in a temporary git worktree.\")"
+    },
+    {
+      "schema": "Anon34527d52c105737d",
+      "field": "max_results",
+      "rhs": "y.number().optional().default(5).describe(\"Maximum number of results to return (default: 5)\")"
+    },
+    {
+      "schema": "BashCommandMessage",
+      "field": "uuid",
+      "rhs": "nT().optional()"
+    },
+    {
+      "schema": "Anon384880e809607c3b",
+      "field": "proto",
+      "rhs": "_"
+    },
+    {
+      "schema": "Anon384880e809607c3b",
+      "field": "short",
+      "rhs": "H"
+    },
+    {
+      "schema": "Anon384880e809607c3b",
+      "field": "cols",
+      "rhs": "y.number().int().min(1).max($HH)"
+    },
+    {
+      "schema": "Anon384880e809607c3b",
+      "field": "rows",
+      "rhs": "y.number().int().min(1).max($HH)"
+    },
+    {
+      "schema": "Anon3a05df05cce88da1",
+      "field": "skills",
+      "rhs": "y.union([Zd().describe(\"Path to additional skill directory (in addition to those in the skills/ directory, if it exists), relative to the plugin root\"),y.array(Zd().describe(\"Path to additional skill directory (in addition to those in the skills/ directory, if it exists), relative to the plugin root\")).describe(\"List of paths to additional skill directories\")])"
+    },
+    {
+      "schema": "Anon3a876cfc36c5271a",
+      "field": "proto",
+      "rhs": "_"
+    },
+    {
+      "schema": "Anon3c852a61b8d06040",
+      "field": "context",
+      "rhs": "y.enum(S3_).describe(\"UI context where these bindings apply. Global bindings work everywhere.\")"
+    },
+    {
+      "schema": "Anon3c852a61b8d06040",
+      "field": "bindings",
+      "rhs": "y.record(y.string().describe('Keystroke pattern (e.g., \"ctrl+k\", \"shift+tab\")'),y.union([y.enum(OK8),y.string().regex(/^command:[a-zA-Z0-9:\\-_]+$/).describe('Command binding (e.g., \"command:help\", \"command:compact\"). Executes the slash command as if typed.'),y.null().describe(\"Set to null to unbind a default shortcut\")]).describe(\"Action to trigger, command to invoke, or null to unbind\")).describe(\"Map of keystroke patterns to actions\")"
+    },
+    {
+      "schema": "Anon3edc5b21ec1b2506",
+      "field": "content",
+      "rhs": "$03()"
+    },
+    {
+      "schema": "Anon3fe237832a7e749f",
+      "field": "line",
+      "rhs": "y.number().int().positive().describe(\"The line number (1-based, as shown in editors)\")"
+    },
+    {
+      "schema": "Anon3fe237832a7e749f",
+      "field": "character",
+      "rhs": "y.number().int().positive().describe(\"The character offset (1-based, as shown in editors)\")"
+    },
+    {
+      "schema": "Anon40a808aba03ef5ae",
+      "field": "type",
+      "rhs": "QK5()"
+    },
+    {
+      "schema": "Anon455d341f4e716d49",
+      "field": "name",
+      "rhs": "y.string().min(1,\"Plugin name cannot be empty\").refine((H)=>!H.includes(\" \"),{message:'Plugin name cannot contain spaces. Use kebab-case (e.g., \"my-plugin\")'}).describe(\"Unique identifier for the plugin, used for namespacing (prefer kebab-case)\")"
+    },
+    {
+      "schema": "Anon478cba16327530fe",
+      "field": "hooks",
+      "rhs": "y.array(_$q()).describe(\"List of hooks to execute when the matcher matches\")"
+    },
+    {
+      "schema": "Anon487c7d5e38b89e19",
+      "field": "output",
+      "rhs": "y.record(y.string(),y.string()).nullable().default(null)"
+    },
+    {
+      "schema": "Anon487c7d5e38b89e19",
+      "field": "children",
+      "rhs": "y.array(y.object({id:y.string(),href:y.string(),kind:y.enum([\"pr\",\"frame\"]).optional()})).nullable().default(null)"
+    },
+    {
+      "schema": "Anon487c7d5e38b89e19",
+      "field": "firstTerminalAt",
+      "rhs": "y.string().nullable().default(null)"
+    },
+    {
+      "schema": "Anon4ca3dfb8097e72a4",
+      "field": "offset",
+      "rhs": "iI(y.number().int().nonnegative().optional()).describe(\"The line number to start reading from. Only provide if the file is too large to read at once\")"
+    },
+    {
+      "schema": "Anon4ca3dfb8097e72a4",
+      "field": "limit",
+      "rhs": "iI(y.number().int().positive().optional()).describe(\"The number of lines to read. Only provide if the file is too large to read at once.\")"
+    },
+    {
+      "schema": "Anon4e67374ed03b4855",
+      "field": "proto",
+      "rhs": "_"
+    },
+    {
+      "schema": "Anon4e67374ed03b4855",
+      "field": "short",
+      "rhs": "H"
+    },
+    {
+      "schema": "Anon4fe176946cbba53a",
+      "field": "questions",
+      "rhs": "y.array(Xg7()).min(1).max(4).describe(\"Questions to ask the user (1-4 questions)\")"
+    },
+    {
+      "schema": "Anon4ffed11602886665",
+      "field": "name",
+      "rhs": "TP().optional().describe(\"Display name. Defaults to the filename without extension.\")"
+    },
+    {
+      "schema": "Anon4ffed11602886665",
+      "field": "description",
+      "rhs": "TP().optional().describe(\"One-line summary shown in listings and the Skill tool.\")"
+    },
+    {
+      "schema": "Anon4ffed11602886665",
+      "field": "model",
+      "rhs": "TP().optional().describe(\"Model override (`haiku`, `sonnet`, `opus`, or a full ID). Use `inherit` to match the parent conversation.\")"
+    },
+    {
+      "schema": "Anon4ffed11602886665",
+      "field": "arguments",
+      "rhs": "KBH().optional().describe(\"@internal \\u2014 typed variant of argument-hint; argument-hint is the documented form\")"
+    },
+    {
+      "schema": "Anon4ffed11602886665",
+      "field": "effort",
+      "rhs": "TP().optional().describe(\"Thinking effort for the model: `low`, `medium`, `high`, `max`, or an integer.\")"
+    },
+    {
+      "schema": "Anon4ffed11602886665",
+      "field": "shell",
+      "rhs": "TP().optional().describe(\"Shell for `!`-command blocks: `bash` or `powershell`. Defaults to bash regardless of platform.\")"
+    },
+    {
+      "schema": "Anon4ffed11602886665",
+      "field": "version",
+      "rhs": "TP().optional().describe(\"@internal \\u2014 bookkeeping, not surfaced to users\")"
+    },
+    {
+      "schema": "AnonC4c40a46c8404e8d",
+      "field": "plugins",
+      "rhs": "y.record(TS_(),y.array(Ek4())).describe(\"Map of plugin IDs to arrays of installation entries\")"
+    },
+    {
+      "schema": "AnonC1e85402264b9779",
+      "field": "updatedPermissions",
+      "rhs": "fK.array(AgH()).optional().catch((H)=>{v(`Malformed updatedPermissions from SDK host ignored: ${H.error.issues[0]?.message??\"unknown\"}`,{level:\"warn\"});return})"
+    },
+    {
+      "schema": "Anon53bc9fe35413b1b8",
+      "field": "line",
+      "rhs": "y.number().int().positive().describe(\"The line number (1-based, as shown in editors)\")"
+    },
+    {
+      "schema": "Anon53bc9fe35413b1b8",
+      "field": "character",
+      "rhs": "y.number().int().positive().describe(\"The character offset (1-based, as shown in editors)\")"
+    },
+    {
+      "schema": "Anon54e56f5c7f954363",
+      "field": "proto",
+      "rhs": "_"
+    },
+    {
+      "schema": "Anon54e56f5c7f954363",
+      "field": "short",
+      "rhs": "H"
+    },
+    {
+      "schema": "Anon568e8bb259d91a4a",
+      "field": "proto",
+      "rhs": "_"
+    },
+    {
+      "schema": "Anon56ac62326198c334",
+      "field": "tasks",
+      "rhs": "y.array(y.object({id:y.string(),subject:y.string(),status:$ZH(),owner:y.string().optional(),blockedBy:y.array(y.string())}))"
+    },
+    {
+      "schema": "Anon58f99ff9ed638fba",
+      "field": "proto",
+      "rhs": "_"
+    },
+    {
+      "schema": "Anon58f99ff9ed638fba",
+      "field": "short",
+      "rhs": "H"
+    },
+    {
+      "schema": "Anon59d0fb42fd6a358b",
+      "field": "proto",
+      "rhs": "_"
+    },
+    {
+      "schema": "Anon59d0fb42fd6a358b",
+      "field": "short",
+      "rhs": "H"
+    },
+    {
+      "schema": "Anon5c2c9226f0fe35bf",
+      "field": "results",
+      "rhs": "y.array(y.union([rn5(),y.string()])).describe(\"Search results and/or text commentary from the model\")"
+    },
+    {
+      "schema": "Anon5d9f72d434bd385c",
+      "field": "init_retry_max_attempts",
+      "rhs": "y.number().int().min(1).max(10).default(3)"
+    },
+    {
+      "schema": "Anon5d9f72d434bd385c",
+      "field": "init_retry_jitter_fraction",
+      "rhs": "y.number().min(0).max(1).default(0.25)"
+    },
+    {
+      "schema": "Anon5d9f72d434bd385c",
+      "field": "uuid_dedup_buffer_size",
+      "rhs": "y.number().int().min(100).max(50000).default(2000)"
+    },
+    {
+      "schema": "Anon5d9f72d434bd385c",
+      "field": "heartbeat_interval_ms",
+      "rhs": "y.number().int().min(5000).max(30000).default(20000)"
+    },
+    {
+      "schema": "Anon5d9f72d434bd385c",
+      "field": "heartbeat_jitter_fraction",
+      "rhs": "y.number().min(0).max(0.5).default(0.1)"
+    },
+    {
+      "schema": "Anon5d9f72d434bd385c",
+      "field": "token_refresh_buffer_ms",
+      "rhs": "y.number().int().min(30000).max(1800000).default(300000)"
+    },
+    {
+      "schema": "Anon5d9f72d434bd385c",
+      "field": "teardown_archive_timeout_ms",
+      "rhs": "y.number().int().min(500).max(2000).default(1500)"
+    },
+    {
+      "schema": "Anon5d9f72d434bd385c",
+      "field": "connect_timeout_ms",
+      "rhs": "y.number().int().min(5000).max(60000).default(15000)"
+    },
+    {
+      "schema": "Anon5da8f4bf3dab6284",
+      "field": "method",
+      "rhs": "y.literal(WJ6)"
+    },
+    {
+      "schema": "Anon5e00245bc85b633a",
+      "field": "name",
+      "rhs": "y.string().min(1).refine((H)=>!H.includes(\" \"))"
+    },
+    {
+      "schema": "Anon5f529be66fc60b8f",
+      "field": "tasks",
+      "rhs": "y.array(Kp8()).default([]).refine((H)=>new Set(H.map((_)=>_.id)).size===H.length,{message:\"task ids must be unique\"})"
+    },
+    {
+      "schema": "Anon5f529be66fc60b8f",
+      "field": "maxConcurrent",
+      "rhs": "y.number().int().positive().default(1)"
+    },
+    {
+      "schema": "Anon61ebb09837db6396",
+      "field": "proto",
+      "rhs": "_"
+    },
+    {
+      "schema": "Anon66c59088d91ec149",
+      "field": "allowedDomains",
+      "rhs": "l6.array(X18).describe('List of allowed domains (e.g., [\"github.com\", \"*.npmjs.org\"])')"
+    },
+    {
+      "schema": "Anon66c59088d91ec149",
+      "field": "deniedDomains",
+      "rhs": "l6.array(X18).describe(\"List of denied domains\")"
+    },
+    {
+      "schema": "Anon66c59088d91ec149",
+      "field": "allowMachLookup",
+      "rhs": "l6.array(l6.string().refine((H)=>{return!(H.endsWith(\"*\")?H.slice(0,-1):H).includes(\"*\")},{message:'Wildcards are only allowed as a single trailing \"*\" (e.g., \"com.example.*\" or \"*\" for all services).'})).optional().describe('macOS only: Additional XPC/Mach service names to allow looking up. Supports trailing-wildcard prefix matching (e.g., \"2BUA8C4S2C.com.1password.*\"). Needed for tools like 1Password CLI, Playwright, or the iOS Simulator that communicate via XPC.')"
+    },
+    {
+      "schema": "Anon66c59088d91ec149",
+      "field": "httpProxyPort",
+      "rhs": "l6.number().int().min(1).max(65535).optional().describe(\"Port of an external HTTP proxy to use instead of starting a local one. When provided, the library will skip starting its own HTTP proxy and use this port. The external proxy must handle domain filtering.\")"
+    },
+    {
+      "schema": "Anon66c59088d91ec149",
+      "field": "socksProxyPort",
+      "rhs": "l6.number().int().min(1).max(65535).optional().describe(\"Port of an external SOCKS proxy to use instead of starting a local one. When provided, the library will skip starting its own SOCKS proxy and use this port. The external proxy must handle domain filtering.\")"
+    },
+    {
+      "schema": "Anon66c59088d91ec149",
+      "field": "mitmProxy",
+      "rhs": "mg1.optional().describe(\"Optional MITM proxy configuration. Routes matching domains through an upstream proxy via Unix socket while SRT still handles allow/deny filtering.\")"
+    },
+    {
+      "schema": "Anon66c59088d91ec149",
+      "field": "parentProxy",
+      "rhs": "pg1.optional().describe(\"Upstream HTTP proxy for outbound connections. When set, SRT's proxy tunnels non-mitmProxy traffic through this parent instead of connecting directly. Falls back to HTTP_PROXY/HTTPS_PROXY/NO_PROXY env vars if unset.\")"
+    },
+    {
+      "schema": "AnonA3eb0815f27f996c",
+      "field": "allowMachLookup",
+      "rhs": "y.array(y.string().refine((H)=>{return!(H.endsWith(\"*\")?H.slice(0,-1):H).includes(\"*\")},{message:'Wildcards are only allowed as a single trailing \"*\" (e.g., \"com.example.*\" or \"*\" for all services).'})).optional().describe('macOS only: Additional XPC/Mach service names to allow looking up. Supports trailing-wildcard prefix matching (e.g., \"com.apple.coresimulator.*\"). Needed for tools that communicate via XPC such as the iOS Simulator or Playwright.')"
+    },
+    {
+      "schema": "Anon6752a06ba5126448",
+      "field": "bwrapPath",
+      "rhs": "y.preprocess((H)=>typeof H===\"string\"&&Sb6.isAbsolute(H)?H:void 0,y.string()).optional().catch(void 0).describe(\"Linux/WSL only: Absolute path to the bwrap (bubblewrap) binary. Overrides auto-detection via PATH. Only honored from admin-controlled managed settings.\")"
+    },
+    {
+      "schema": "Anon6752a06ba5126448",
+      "field": "socatPath",
+      "rhs": "y.preprocess((H)=>typeof H===\"string\"&&Sb6.isAbsolute(H)?H:void 0,y.string()).optional().catch(void 0).describe(\"Linux/WSL only: Absolute path to the socat binary used for the sandbox network proxy. Overrides auto-detection via PATH. Only honored from admin-controlled managed settings.\")"
+    },
+    {
+      "schema": "Anon675b3e71bccc4348",
+      "field": "proto",
+      "rhs": "_"
+    },
+    {
+      "schema": "Anon69606b70b477d76a",
+      "field": "outputStyles",
+      "rhs": "y.union([Zd().describe(\"Path to additional output styles directory or file (in addition to those in the output-styles/ directory, if it exists), relative to the plugin root\"),y.array(Zd().describe(\"Path to additional output styles directory or file (in addition to those in the output-styles/ directory, if it exists), relative to the plugin root\")).describe(\"List of paths to additional output styles directories or files\")])"
+    },
+    {
+      "schema": "AnonD73f663a602579a5",
+      "field": "proto",
+      "rhs": "y.number().int().min($P_).max(I1)"
+    },
+    {
+      "schema": "AnonD73f663a602579a5",
+      "field": "launch",
+      "rhs": "y.discriminatedUnion(\"mode\",[y.object({mode:y.literal(\"prompt\"),args:y.array(y.string())}),y.object({mode:y.literal(\"resume\"),sessionId:y.string(),fork:y.boolean(),flagArgs:y.array(y.string())})])"
+    },
+    {
+      "schema": "AnonD73f663a602579a5",
+      "field": "cols",
+      "rhs": "y.number().int().positive().max($HH).optional()"
+    },
+    {
+      "schema": "AnonD73f663a602579a5",
+      "field": "rows",
+      "rhs": "y.number().int().positive().max($HH).optional()"
+    },
+    {
+      "schema": "Anon698c18ecea5093e9",
+      "field": "proto",
+      "rhs": "_"
+    },
+    {
+      "schema": "Anon6a1428514b1e29d0",
+      "field": "head_uuid",
+      "rhs": "nT()"
+    },
+    {
+      "schema": "Anon6a1428514b1e29d0",
+      "field": "anchor_uuid",
+      "rhs": "nT()"
+    },
+    {
+      "schema": "Anon6a1428514b1e29d0",
+      "field": "tail_uuid",
+      "rhs": "nT()"
+    },
+    {
+      "schema": "Anon72bae3a903ae0230",
+      "field": "proto",
+      "rhs": "_"
+    },
+    {
+      "schema": "Anon72bae3a903ae0230",
+      "field": "short",
+      "rhs": "H"
+    },
+    {
+      "schema": "Anon72bae3a903ae0230",
+      "field": "cols",
+      "rhs": "y.number().int().min(1).max($HH)"
+    },
+    {
+      "schema": "Anon72bae3a903ae0230",
+      "field": "rows",
+      "rhs": "y.number().int().min(1).max($HH)"
+    },
+    {
+      "schema": "Anon73fe45b1ea1c1b8b",
+      "field": "reason",
+      "rhs": "u45()"
+    },
+    {
+      "schema": "Anon7747a1b91bf2c520",
+      "field": "resultCount",
+      "rhs": "y.number().int().nonnegative().optional().describe(\"Number of results (definitions, references, symbols)\")"
+    },
+    {
+      "schema": "Anon7747a1b91bf2c520",
+      "field": "fileCount",
+      "rhs": "y.number().int().nonnegative().optional().describe(\"Number of files containing results\")"
+    },
+    {
+      "schema": "Anon7e3b855e4669d932",
+      "field": "content",
+      "rhs": "y.array(H).describe(\"Array of search hits\")"
+    },
+    {
+      "schema": "Anon7e45b044bc052ddd",
+      "field": "mcpServers",
+      "rhs": "y.union([XXH().describe(\"MCP servers to include in the plugin (in addition to those in the .mcp.json file, if it exists)\"),T$q().describe(\"Path or URL to MCPB file containing MCP server configuration\"),y.record(y.string(),gr()).describe(\"MCP server configurations keyed by server name\"),y.array(y.union([XXH().describe(\"Path to MCP servers configuration file\"),T$q().describe(\"Path or URL to MCPB file\"),y.record(y.string(),gr()).describe(\"Inline MCP server configurations\")])).describe(\"Array of MCP server configurations (paths, MCPB files, or inline definitions)\")])"
+    },
+    {
+      "schema": "Anon80dfef43f23e05e9",
+      "field": "watchPaths",
+      "rhs": "y.array(y.string()).describe(\"Absolute paths to watch for FileChanged hooks\").optional()"
+    },
+    {
+      "schema": "Anon8118a134cfa70ce7",
+      "field": "line",
+      "rhs": "y.number().int().positive().describe(\"The line number (1-based, as shown in editors)\")"
+    },
+    {
+      "schema": "Anon8118a134cfa70ce7",
+      "field": "character",
+      "rhs": "y.number().int().positive().describe(\"The character offset (1-based, as shown in editors)\")"
+    },
+    {
+      "schema": "Anon81aa2ad430cfb719",
+      "field": "watchPaths",
+      "rhs": "y.array(y.string()).describe(\"Absolute paths to watch for FileChanged hooks\").optional()"
+    },
+    {
+      "schema": "Anon84209d6090a7e3f4",
+      "field": "timeout",
+      "rhs": "iI(y.number().optional()).describe(`Optional timeout in milliseconds (max ${sf_()})`)"
+    },
+    {
+      "schema": "Anon84209d6090a7e3f4",
+      "field": "run_in_background",
+      "rhs": "W0(y.boolean().optional()).describe(\"Set to true to run this command in the background.\")"
+    },
+    {
+      "schema": "Anon84209d6090a7e3f4",
+      "field": "dangerouslyDisableSandbox",
+      "rhs": "W0(y.boolean().optional()).describe(\"Set this to true to dangerously override sandbox mode and run commands without sandboxing.\")"
+    },
+    {
+      "schema": "Anon862753631acf541f",
+      "field": "timeoutMs",
+      "rhs": "y.number().int().min(1000).max(120000)"
+    },
+    {
+      "schema": "Anon862753631acf541f",
+      "field": "throttleMs",
+      "rhs": "y.number().int().min(0).max(3600000)"
+    },
+    {
+      "schema": "Anon862753631acf541f",
+      "field": "summaryLineThreshold",
+      "rhs": "y.number().int().min(1).max(50)"
+    },
+    {
+      "schema": "Anon877b27a89b35ea09",
+      "field": "sessionTitle",
+      "rhs": "y.string().describe(\"Set the session title (same effect as /rename)\").optional()"
+    },
+    {
+      "schema": "Anon877b27a89b35ea09",
+      "field": "suppressOriginalPrompt",
+      "rhs": "y.boolean().describe('When decision is \"block\", omit the original prompt from the block message').optional()"
+    },
+    {
+      "schema": "Anon87853e03408cd7f3",
+      "field": "preserved_segment",
+      "rhs": "y.object({head_uuid:nT(),anchor_uuid:nT(),tail_uuid:nT()}).optional().describe(\"Relink info for messagesToKeep. Loaders splice the preserved segment at anchor_uuid (summary for suffix-preserving, boundary for prefix-preserving partial compact) so resume includes preserved content. Unset when compaction summarizes everything (no messagesToKeep).\")"
+    },
+    {
+      "schema": "Anon87f234d6cc6758f4",
+      "field": "when",
+      "rhs": "y.union([y.literal(\"always\"),y.string().startsWith(\"on-skill-invoke:\").refine((H)=>H.length>16,{message:\"on-skill-invoke: must specify a skill name\"})]).default(\"always\").describe('Arm trigger. \"always\" arms at session start and on plugin reload. \"on-skill-invoke:<skill>\" arms the first time that skill is dispatched (via Skill tool or slash command).')"
+    },
+    {
+      "schema": "Anon8891d3015f2e111b",
+      "field": "monitors",
+      "rhs": "y.union([XXH().describe(\"Path to a JSON file containing the monitors array, relative to the plugin root\"),lb6()]).describe(\"Background watch scripts the host arms as persistent Monitor tasks (unsandboxed, same trust tier as hooks) so plugins need not instruct the model to arm them. When omitted, monitors/monitors.json at the plugin root is loaded if present.\")"
+    },
+    {
+      "schema": "Anon8ee2aeecd8a42fb8",
+      "field": "channels",
+      "rhs": "y.array(y.object({server:y.string().min(1).describe(\"Name of the MCP server this channel binds to. Must match a key in this plugin's mcpServers.\"),displayName:y.string().optional().describe('Human-readable name shown in the config dialog title (e.g., \"Telegram\"). Defaults to the server name.'),userConfig:y.record(y.string(),w$q()).optional().describe(\"Fields to prompt the user for when enabling this plugin in assistant mode. Saved values are substituted into ${user_config.KEY} references in the mcpServers env.\")}).strict()).describe(\"Channels this plugin provides. Each entry declares an MCP server as a message channel and optionally specifies user configuration to prompt for at enable time.\")"
+    },
+    {
+      "schema": "Anon907c25b0ca75d586",
+      "field": "recurring",
+      "rhs": "W0(y.boolean().optional()).describe(`true (default) = fire on every cron match until deleted or auto-expired after ${Eu} days. false = fire once at the next match, then auto-delete. Use false for \"remind me at X\" one-shot requests with pinned minute/hour/dom/month.`)"
+    },
+    {
+      "schema": "Anon907c25b0ca75d586",
+      "field": "durable",
+      "rhs": "W0(y.boolean().optional()).describe(\"true = persist to .claude/scheduled_tasks.json and survive restarts. false (default) = in-memory only, dies when this Claude session ends. Use true only when the user asks the task to survive across sessions.\")"
+    },
+    {
+      "schema": "Anon90b5f298a41f17db",
+      "field": "additional_model_options",
+      "rhs": "l6.array(l6.object({model:l6.string(),name:l6.string(),description:l6.string()}).transform(({model:H,name:_,description:q})=>({value:H,label:_,description:q}))).nullish()"
+    },
+    {
+      "schema": "Anon90b5f298a41f17db",
+      "field": "additional_model_costs",
+      "rhs": "l6.record(l6.object({input_tokens:l6.number(),output_tokens:l6.number(),prompt_cache_write_tokens:l6.number(),prompt_cache_read_tokens:l6.number(),web_search_requests:l6.number().nullish()}).transform((H)=>({inputTokens:H.input_tokens,outputTokens:H.output_tokens,promptCacheWriteTokens:H.prompt_cache_write_tokens,promptCacheReadTokens:H.prompt_cache_read_tokens,webSearchRequests:H.web_search_requests??0.01}))).nullish()"
+    },
+    {
+      "schema": "Anon90b5f298a41f17db",
+      "field": "oauth_account",
+      "rhs": "l6.object({account_uuid:l6.string().nullish(),account_email:l6.string().nullish(),organization_uuid:l6.string().nullish(),organization_name:l6.string().nullish(),organization_type:l6.string().nullish(),organization_rate_limit_tier:l6.string().nullish(),user_rate_limit_tier:l6.string().nullish(),seat_tier:l6.string().nullish()}).passthrough().nullish()"
+    },
+    {
+      "schema": "Anon981ea30cfb7366cb",
+      "field": "message",
+      "rhs": "y.union([y.string().describe(\"Plain text message content\"),Cr5()])"
+    },
+    {
+      "schema": "Anon9a50038541ead6a0",
+      "field": "source",
+      "rhs": "y.enum(N45)"
+    },
+    {
+      "schema": "Anon9a8d70cac1f738a5",
+      "field": "proto",
+      "rhs": "_"
+    },
+    {
+      "schema": "Anon9f36a59b26ae9d70",
+      "field": "experimental",
+      "rhs": "y.preprocess((H)=>typeof H===\"object\"&&H!==null&&!Array.isArray(H)?H:void 0,y.object({...Y$q().partial().shape,...J$q().partial().shape}).optional().describe(\"Components whose manifest shape may change without a deprecation cycle. Move a key out of here once it is promoted to stable.\"))"
+    },
+    {
+      "schema": "AnonA48dc4689b55814d",
+      "field": "max_entries",
+      "rhs": "y.number().int().positive()"
+    },
+    {
+      "schema": "AnonA48dc4689b55814d",
+      "field": "received_entries",
+      "rhs": "y.number().int().positive()"
+    },
+    {
+      "schema": "AnonA4ed354c3f04e8eb",
+      "field": "allow",
+      "rhs": "y.array(wS_()).optional().describe(\"List of permission rules for allowed operations\")"
+    },
+    {
+      "schema": "AnonA4ed354c3f04e8eb",
+      "field": "deny",
+      "rhs": "y.array(wS_()).optional().describe(\"List of permission rules for denied operations\")"
+    },
+    {
+      "schema": "AnonA4ed354c3f04e8eb",
+      "field": "ask",
+      "rhs": "y.array(wS_()).optional().describe(\"List of permission rules that should always prompt for confirmation\")"
+    },
+    {
+      "schema": "AnonA4ed354c3f04e8eb",
+      "field": "defaultMode",
+      "rhs": "y.enum([...Ur,...X$q(H)]).optional().describe(\"Default permission mode when Claude Code needs access\")"
+    },
+    {
+      "schema": "AnonA60bf646de489df9",
+      "field": "proto",
+      "rhs": "_"
+    },
+    {
+      "schema": "AnonA88535d50dd03a5d",
+      "field": "agents",
+      "rhs": "y.union([Qb6().describe(\"Path to additional agent file (in addition to those in the agents/ directory, if it exists), relative to the plugin root\"),y.array(Qb6().describe(\"Path to additional agent file (in addition to those in the agents/ directory, if it exists), relative to the plugin root\")).describe(\"List of paths to additional agent files\")])"
+    },
+    {
+      "schema": "AnonAb800c60d329e0ae",
+      "field": "todos",
+      "rhs": "QgH().describe(\"The updated todo list\")"
+    },
+    {
+      "schema": "AnonAe38f96eaf1695ad",
+      "field": "proto",
+      "rhs": "y.number().int().min($P_).max(I1)"
+    },
+    {
+      "schema": "AnonAe58b8bfd0cc6529",
+      "field": "reason",
+      "rhs": "y.string().describe(\"Reason, if the condition was not met\").optional()"
+    },
+    {
+      "schema": "AnonAf1279aab5a04220",
+      "field": "sha",
+      "rhs": "gb6().optional().describe(\"Specific commit SHA to use\")"
+    },
+    {
+      "schema": "AnonAf7ed41466688cbe",
+      "field": "denyRead",
+      "rhs": "l6.array(Da_).describe(\"Paths denied for reading\")"
+    },
+    {
+      "schema": "AnonAf7ed41466688cbe",
+      "field": "allowRead",
+      "rhs": "l6.array(Da_).optional().describe(\"Paths to re-allow reading within denied regions (takes precedence over denyRead). Use with denyRead to deny a broad region then allow back specific subdirectories.\")"
+    },
+    {
+      "schema": "AnonAf7ed41466688cbe",
+      "field": "allowWrite",
+      "rhs": "l6.array(Da_).describe(\"Paths allowed for writing\")"
+    },
+    {
+      "schema": "AnonAf7ed41466688cbe",
+      "field": "denyWrite",
+      "rhs": "l6.array(Da_).describe(\"Paths denied for writing (takes precedence over allowWrite)\")"
+    },
+    {
+      "schema": "AnonB39b4d370f355ec4",
+      "field": "type",
+      "rhs": "H.describe(\"The MIME type of the image\")"
+    },
+    {
+      "schema": "AnonB42f2d0e9ab0c2ca",
+      "field": "sha",
+      "rhs": "gb6().optional().describe(\"Specific commit SHA to use\")"
+    },
+    {
+      "schema": "AnonB485e702cccaadbd",
+      "field": "updatedToolOutput",
+      "rhs": "y.unknown().describe(\"Replaces the tool output before it is sent to the model\").optional()"
+    },
+    {
+      "schema": "AnonB485e702cccaadbd",
+      "field": "updatedMCPToolOutput",
+      "rhs": "y.unknown().describe(\"Replaces the output for MCP tools only. Prefer updatedToolOutput, which works for all tools\").optional()"
+    },
+    {
+      "schema": "AnonEa11f8dcd96cf80d",
+      "field": "name",
+      "rhs": "y.string().min(1,\"Plugin name cannot be empty\").refine((H)=>!H.includes(\" \"),{message:'Plugin name cannot contain spaces. Use kebab-case (e.g., \"my-plugin\")'}).describe(\"Plugin name as it appears in the target repository\")"
+    },
+    {
+      "schema": "AnonB75f2226f390cc55",
+      "field": "name",
+      "rhs": "$$q().refine((H)=>!Qr.has(H.toLowerCase()),{message:\"Reserved official marketplace names cannot be used with settings sources. validateOfficialNameSource only accepts github/git sources from anthropics/* for these names; a settings source would be rejected after loadAndCacheMarketplace has already written to disk with cleanupNeeded=false.\"}).describe(\"Marketplace name. Must match the extraKnownMarketplaces key (enforced); the synthetic manifest is written under this name. Same validation \"+\"as PluginMarketplaceSchema plus reserved-name rejection \\u2014 \"+\"validateOfficialNameSource runs after the disk write, too late to clean up.\")"
+    },
+    {
+      "schema": "AnonB89e60bebfe8976d",
+      "field": "poll_interval_ms_at_capacity",
+      "rhs": "y.number().int().refine((H)=>H===0||H>=100,EWK)"
+    },
+    {
+      "schema": "AnonB89e60bebfe8976d",
+      "field": "multisession_poll_interval_ms_at_capacity",
+      "rhs": "y.number().int().refine((H)=>H===0||H>=100,EWK).default(IoH.multisession_poll_interval_ms_at_capacity)"
+    },
+    {
+      "schema": "AnonB9caf80f4ed71130",
+      "field": "domains",
+      "rhs": "l6.array(X18).min(1).describe('Domains to route through the MITM proxy (e.g., [\"api.example.com\", \"*.internal.org\"])')"
+    },
+    {
+      "schema": "AnonBf6731c96a51632d",
+      "field": "userConfig",
+      "rhs": "y.record(y.string().regex(/^[A-Za-z_]\\w*$/,\"Option keys must be valid identifiers (letters, digits, underscore; no leading digit) \\u2014 they become CLAUDE_PLUGIN_OPTION_<KEY> env vars in hooks\"),w$q()).optional().describe(\"User-configurable values this plugin needs. Prompted at enable time. Non-sensitive values saved to settings.json; sensitive values to secure storage. Available as ${user_config.KEY} in MCP/LSP server config, hook commands, and (non-sensitive only) skill/agent content. Keep sensitive value counts small.\")"
+    },
+    {
+      "schema": "AnonC212779e1b8673f7",
+      "field": "name",
+      "rhs": "y.string().superRefine((H,_)=>{try{fnH(H)}catch(q){_.addIssue({code:\"custom\",message:VH(q)})}}).optional().describe('Optional name for a new worktree. Each \"/\"-separated segment may contain only letters, digits, dots, underscores, and dashes; max 64 chars total. A random name is generated if not provided. Mutually exclusive with `path`.')"
+    },
+    {
+      "schema": "AnonC42f41f13b6b01e9",
+      "field": "proto",
+      "rhs": "_"
+    },
+    {
+      "schema": "AnonC50b7fc44fbc8573",
+      "field": "network",
+      "rhs": "Ou9.describe(\"Network restrictions configuration\")"
+    },
+    {
+      "schema": "AnonC50b7fc44fbc8573",
+      "field": "filesystem",
+      "rhs": "Tu9.describe(\"Filesystem restrictions configuration\")"
+    },
+    {
+      "schema": "AnonC50b7fc44fbc8573",
+      "field": "ignoreViolations",
+      "rhs": "Au9.optional().describe(\"Optional configuration for ignoring specific violations\")"
+    },
+    {
+      "schema": "AnonC50b7fc44fbc8573",
+      "field": "ripgrep",
+      "rhs": "zu9.optional().describe('Custom ripgrep configuration (default: { command: \"rg\" })')"
+    },
+    {
+      "schema": "AnonC50b7fc44fbc8573",
+      "field": "mandatoryDenySearchDepth",
+      "rhs": "l6.number().int().min(1).max(10).optional().describe(\"Maximum directory depth to search for dangerous files on Linux (default: 3). Higher values provide more protection but slower performance.\")"
+    },
+    {
+      "schema": "AnonC50b7fc44fbc8573",
+      "field": "seccomp",
+      "rhs": "Bg1.optional().describe(\"Custom seccomp binary paths (Linux only).\")"
+    },
+    {
+      "schema": "AnonC50b7fc44fbc8573",
+      "field": "bwrapPath",
+      "rhs": "qu9.optional().describe('Linux only: absolute path to the bwrap (bubblewrap) binary. When set, this path is used directly instead of resolving \"bwrap\" via PATH.')"
+    },
+    {
+      "schema": "AnonC50b7fc44fbc8573",
+      "field": "socatPath",
+      "rhs": "qu9.optional().describe('Linux only: absolute path to the socat binary. When set, this path is used directly instead of resolving \"socat\" via PATH.')"
+    },
+    {
+      "schema": "AnonC67725903dd8d123",
+      "field": "name",
+      "rhs": "y.string().min(1).regex(/^[A-Za-z0-9][-A-Za-z0-9._]*$/)"
+    },
+    {
+      "schema": "AnonC67725903dd8d123",
+      "field": "marketplace",
+      "rhs": "y.string().min(1).regex(/^[A-Za-z0-9][-A-Za-z0-9._]*$/).optional()"
+    },
+    {
+      "schema": "AnonC784c9580709dafb",
+      "field": "task",
+      "rhs": "y.object({id:y.string(),subject:y.string(),description:y.string(),status:$ZH(),blocks:y.array(y.string()),blockedBy:y.array(y.string())}).nullable()"
+    },
+    {
+      "schema": "AnonCae0b9e9f78d24fb",
+      "field": "oldTodos",
+      "rhs": "QgH().describe(\"The todo list before the update\")"
+    },
+    {
+      "schema": "AnonCae0b9e9f78d24fb",
+      "field": "newTodos",
+      "rhs": "QgH().describe(\"The todo list after the update\")"
+    },
+    {
+      "schema": "AnonCd2babfe0ed7a7f0",
+      "field": "annotations",
+      "rhs": "Pg7()"
+    },
+    {
+      "schema": "AnonCf5f140847b1eeac",
+      "field": "method",
+      "rhs": "y.literal(_m3)"
+    },
+    {
+      "schema": "AnonD1f1ce578c373749",
+      "field": "proto",
+      "rhs": "_"
+    },
+    {
+      "schema": "AnonD1f1ce578c373749",
+      "field": "short",
+      "rhs": "H"
+    },
+    {
+      "schema": "AnonD63b469e0a2b7718",
+      "field": "status",
+      "rhs": "$ZH()"
+    },
+    {
+      "schema": "AnonDbaff3e8b7080332",
+      "field": "permissionMode",
+      "rhs": "y.enum(EoH).default(\"dontAsk\")"
+    },
+    {
+      "schema": "AnonDbaff3e8b7080332",
+      "field": "maxQueued",
+      "rhs": "y.number().int().positive().default(1)"
+    },
+    {
+      "schema": "AnonDd057744e6978ee0",
+      "field": "continue",
+      "rhs": "y.boolean().describe(\"Whether Claude should continue after hook (default: true)\").optional()"
+    },
+    {
+      "schema": "AnonDd057744e6978ee0",
+      "field": "suppressOutput",
+      "rhs": "y.boolean().describe(\"Hide stdout from transcript (default: false)\").optional()"
+    },
+    {
+      "schema": "AnonDd057744e6978ee0",
+      "field": "stopReason",
+      "rhs": "y.string().describe(\"Message shown when continue is false\").optional()"
+    },
+    {
+      "schema": "AnonDd057744e6978ee0",
+      "field": "reason",
+      "rhs": "y.string().describe(\"Explanation for the decision\").optional()"
+    },
+    {
+      "schema": "AnonDd057744e6978ee0",
+      "field": "systemMessage",
+      "rhs": "y.string().describe(\"Warning message shown to the user\").optional()"
+    },
+    {
+      "schema": "AnonDd057744e6978ee0",
+      "field": "hookSpecificOutput",
+      "rhs": "y.union([y.object({hookEventName:y.literal(\"PreToolUse\"),permissionDecision:Ph3().optional(),permissionDecisionReason:y.string().optional(),updatedInput:y.record(y.string(),y.unknown()).optional(),additionalContext:y.string().optional()}),y.object({hookEventName:y.literal(\"UserPromptSubmit\"),additionalContext:y.string().optional(),sessionTitle:y.string().describe(\"Set the session title (same effect as /rename)\").optional(),suppressOriginalPrompt:y.boolean().describe('When decision is \"block\", omit the original prompt from the block message').optional()}),y.object({hookEventName:y.literal(\"UserPromptExpansion\"),additionalContext:y.string().optional()}),y.object({hookEventName:y.literal(\"SessionStart\"),additionalContext:y.string().optional(),initialUserMessage:y.string().optional(),watchPaths:y.array(y.string()).describe(\"Absolute paths to watch for FileChanged hooks\").optional()}),y.object({hookEventName:y.literal(\"Setup\"),additionalContext:y.string().optional()}),y.object({hookEventName:y.literal(\"SubagentStart\"),additionalContext:y.string().optional()}),y.object({hookEventName:y.literal(\"PostToolUse\"),additionalContext:y.string().optional(),updatedToolOutput:y.unknown().describe(\"Replaces the tool output before it is sent to the model\").optional(),updatedMCPToolOutput:y.unknown().describe(\"Replaces the output for MCP tools only. Prefer updatedToolOutput, which works for all tools\").optional()}),y.object({hookEventName:y.literal(\"PostToolUseFailure\"),additionalContext:y.string().optional()}),y.object({hookEventName:y.literal(\"PostToolBatch\"),additionalContext:y.string().optional()}),y.object({hookEventName:y.literal(\"PermissionDenied\"),retry:y.boolean().optional()}),y.object({hookEventName:y.literal(\"Notification\"),additionalContext:y.string().optional()}),y.object({hookEventName:y.literal(\"PermissionRequest\"),decision:y.union([y.object({behavior:y.literal(\"allow\"),updatedInput:y.record(y.string(),y.unknown()).optional(),updatedPermissions:y.array(AgH()).optional()}),y.object({behavior:y.literal(\"deny\"),message:y.string().optional(),interrupt:y.boolean().optional()})])}),y.object({hookEventName:y.literal(\"Elicitation\"),action:y.enum([\"accept\",\"decline\",\"cancel\"]).optional(),content:y.record(y.string(),y.unknown()).optional()}),y.object({hookEventName:y.literal(\"ElicitationResult\"),action:y.enum([\"accept\",\"decline\",\"cancel\"]).optional(),content:y.record(y.string(),y.unknown()).optional()}),y.object({hookEventName:y.literal(\"CwdChanged\"),watchPaths:y.array(y.string()).describe(\"Absolute paths to watch for FileChanged hooks\").optional()}),y.object({hookEventName:y.literal(\"FileChanged\"),watchPaths:y.array(y.string()).describe(\"Absolute paths to watch for FileChanged hooks\").optional()}),y.object({hookEventName:y.literal(\"WorktreeCreate\"),worktreePath:y.string()})]).optional()"
+    },
+    {
+      "schema": "AnonDd900b6584cb8f8f",
+      "field": "name",
+      "rhs": "TP().optional().describe(\"Style name used in `/output-style` and settings. Defaults to the filename.\")"
+    },
+    {
+      "schema": "AnonDd900b6584cb8f8f",
+      "field": "description",
+      "rhs": "TP().optional().describe(\"Shown in the `/output-style` picker.\")"
+    },
+    {
+      "schema": "AnonDe860206bbc8a37d",
+      "field": "recurringFrac",
+      "rhs": "y.number().min(0).max(1)"
+    },
+    {
+      "schema": "AnonDe860206bbc8a37d",
+      "field": "recurringCapMs",
+      "rhs": "y.number().int().min(0).max(h38)"
+    },
+    {
+      "schema": "AnonDe860206bbc8a37d",
+      "field": "oneShotMaxMs",
+      "rhs": "y.number().int().min(0).max(h38)"
+    },
+    {
+      "schema": "AnonDe860206bbc8a37d",
+      "field": "oneShotFloorMs",
+      "rhs": "y.number().int().min(0).max(h38)"
+    },
+    {
+      "schema": "AnonDe860206bbc8a37d",
+      "field": "oneShotMinuteMod",
+      "rhs": "y.number().int().min(1).max(60)"
+    },
+    {
+      "schema": "AnonDe860206bbc8a37d",
+      "field": "recurringMaxAgeMs",
+      "rhs": "y.number().int().min(0).max(Hn1).default(Vu.recurringMaxAgeMs)"
+    },
+    {
+      "schema": "AnonDe860206bbc8a37d",
+      "field": "cacheLeadMs",
+      "rhs": "y.number().int().min(0).max(60000).default(Vu.cacheLeadMs)"
+    },
+    {
+      "schema": "AnonE04fa7a316494825",
+      "field": "timeout",
+      "rhs": "iI(y.number().optional()).describe(`Optional timeout in milliseconds (max ${WiH()})`)"
+    },
+    {
+      "schema": "AnonE04fa7a316494825",
+      "field": "run_in_background",
+      "rhs": "W0(y.boolean().optional()).describe(\"Set to true to run this command in the background.\")"
+    },
+    {
+      "schema": "AnonE04fa7a316494825",
+      "field": "dangerouslyDisableSandbox",
+      "rhs": "W0(y.boolean().optional()).describe(\"Set this to true to dangerously override sandbox mode and run commands without sandboxing.\")"
+    },
+    {
+      "schema": "AnonE0bdf43c27b04fa4",
+      "field": "status",
+      "rhs": "$ZH()"
+    },
+    {
+      "schema": "AnonE0cf900e045dfa5d",
+      "field": "watchPaths",
+      "rhs": "y.array(y.string()).describe(\"Absolute paths to watch for FileChanged hooks\").optional()"
+    },
+    {
+      "schema": "AnonE21ecc26d6950f1c",
+      "field": "model",
+      "rhs": "y.string().trim().min(1,\"Model cannot be empty\").transform((H)=>H.toLowerCase()===\"inherit\"?\"inherit\":H).optional()"
+    },
+    {
+      "schema": "AnonE21ecc26d6950f1c",
+      "field": "effort",
+      "rhs": "y.union([y.enum(TF),y.number().int()]).optional()"
+    },
+    {
+      "schema": "AnonE21ecc26d6950f1c",
+      "field": "permissionMode",
+      "rhs": "y.enum(DN).optional()"
+    },
+    {
+      "schema": "AnonE21ecc26d6950f1c",
+      "field": "maxTurns",
+      "rhs": "y.number().int().positive().optional()"
+    },
+    {
+      "schema": "AnonEc2adbe2e76a6fd1",
+      "field": "proto",
+      "rhs": "_"
+    },
+    {
+      "schema": "AnonEca25b4a4b5b6c9a",
+      "field": "proto",
+      "rhs": "_"
+    },
+    {
+      "schema": "AnonEca25b4a4b5b6c9a",
+      "field": "short",
+      "rhs": "H"
+    },
+    {
+      "schema": "AnonEca25b4a4b5b6c9a",
+      "field": "nonce",
+      "rhs": "H.optional()"
+    },
+    {
+      "schema": "AnonEfc27434e33c1652",
+      "field": "params",
+      "rhs": "y.object({eventName:y.string(),eventData:y.object({}).passthrough()})"
+    },
+    {
+      "schema": "AnonEfc27434e33c16522",
+      "field": "params",
+      "rhs": "y.object({eventName:y.string(),eventData:y.object({}).passthrough()})"
+    },
+    {
+      "schema": "AnonF2fe337be2ec3f1e",
+      "field": "lspServers",
+      "rhs": "y.union([XXH().describe(\"Path to .lsp.json configuration file relative to plugin root\"),y.record(y.string(),YCH()).describe(\"LSP server configurations keyed by server name\"),y.array(y.union([XXH().describe(\"Path to LSP configuration file\"),y.record(y.string(),YCH()).describe(\"Inline LSP server configurations\")])).describe(\"Array of LSP server configurations (paths or inline definitions)\")])"
+    },
+    {
+      "schema": "AnonF30b60c6af590788",
+      "field": "memory_type",
+      "rhs": "y.enum(h45)"
+    },
+    {
+      "schema": "AnonF30b60c6af590788",
+      "field": "load_reason",
+      "rhs": "y.enum(y45)"
+    },
+    {
+      "schema": "AnonF389d38d1a1a46fe",
+      "field": "hooks",
+      "rhs": "y.union([XXH().describe(\"Path to file with additional hooks (in addition to those in hooks/hooks.json, if it exists), relative to the plugin root\"),y.lazy(()=>lS()).describe(\"Additional hooks (in addition to those in hooks/hooks.json, if it exists)\"),y.array(y.union([XXH().describe(\"Path to file with additional hooks (in addition to those in hooks/hooks.json, if it exists), relative to the plugin root\"),y.lazy(()=>lS()).describe(\"Additional hooks (in addition to those in hooks/hooks.json, if it exists)\")]))])"
+    },
+    {
+      "schema": "AnonF3d46ed04eec04b8",
+      "field": "bindings",
+      "rhs": "y.record(y.string(),y.string().nullable())"
+    },
+    {
+      "schema": "AnonF43563b149552c52",
+      "field": "status",
+      "rhs": "H.optional().describe(\"New status for the task\")"
+    },
+    {
+      "schema": "AnonF7753c18cc173744",
+      "field": "commands",
+      "rhs": "y.union([db6().describe(\"Path to additional command file or skill directory (in addition to those in the commands/ directory, if it exists), relative to the plugin root\"),y.array(db6().describe(\"Path to additional command file or skill directory (in addition to those in the commands/ directory, if it exists), relative to the plugin root\")).describe(\"List of paths to additional command files or skill directories\"),y.record(y.string(),$k4()).describe('Object mapping of command names to their metadata and source files. Command name becomes the slash command name (e.g., \"about\" \\u2192 \"/plugin:about\")')])"
+    },
+    {
+      "schema": "AnonF85c664bcc687fe5",
+      "field": "callbackPort",
+      "rhs": "y.number().int().positive().optional().describe(\"Fixed loopback callback port for the IdP OIDC login. Only needed if the IdP does not honor RFC 8252 port-any matching.\")"
+    },
+    {
+      "schema": "AnonFf60ce6646410905",
+      "field": "name",
+      "rhs": "$$q()"
+    },
+    {
+      "schema": "CommandMessage",
+      "field": "if",
+      "rhs": "I8_()"
+    },
+    {
+      "schema": "CommandMessage",
+      "field": "shell",
+      "rhs": "y.enum(ezq).optional().describe(\"Shell interpreter. 'bash' uses your $SHELL (bash/zsh/sh); 'powershell' uses pwsh. Defaults to bash (powershell on Windows without Git Bash).\")"
+    },
+    {
+      "schema": "CommandMessage2",
+      "field": "$schema",
+      "rhs": "y.literal(Gzq).optional().describe(\"JSON Schema reference for Claude Code settings\")"
+    },
+    {
+      "schema": "CommandMessage2",
+      "field": "cleanupPeriodDays",
+      "rhs": "y.number().int().positive().optional().describe(\"Number of days to retain chat transcripts before automatic cleanup (default: 30). Minimum 1. Use a large value for long retention; use --no-session-persistence to disable transcript writes entirely.\")"
+    },
+    {
+      "schema": "CommandMessage2",
+      "field": "skillListingMaxDescChars",
+      "rhs": "y.number().int().positive().optional().describe(\"Per-skill description character cap in the skill listing sent to Claude (default: 1536). Descriptions longer than this are truncated. Raise to opt in to higher per-turn context cost.\")"
+    },
+    {
+      "schema": "CommandMessage2",
+      "field": "skillListingBudgetFraction",
+      "rhs": "y.number().gt(0).lte(1).optional().describe(\"Fraction of the context window (in characters) reserved for the skill listing sent to Claude (default: 0.01 = 1%). When the listing exceeds this, descriptions are shortened to fit. Raise to opt in to higher per-turn context cost.\")"
+    },
+    {
+      "schema": "CommandMessage2",
+      "field": "permissions",
+      "rhs": "N$q(H).optional().describe(\"Tool usage permissions configuration\")"
+    },
+    {
+      "schema": "CommandMessage2",
+      "field": "strictPluginOnlyCustomization",
+      "rhs": "y.preprocess((_)=>Array.isArray(_)?_.filter((q)=>GXH.includes(q)):_,y.union([y.boolean(),y.array(y.enum(GXH))])).optional().catch(void 0).describe('When set in managed settings, blocks non-plugin customization sources for the listed surfaces. Array form locks specific surfaces (e.g. [\"skills\", \"hooks\"]); `true` locks all four; `false` is an explicit no-op. Blocked: ~/.claude/{surface}/, .claude/{surface}/ (project), settings.json hooks, .mcp.json. NOT blocked: managed (policySettings) sources, plugin-provided customizations. '+\"Composes with strictKnownMarketplaces for end-to-end admin control \\u2014 plugins gated by \"+\"marketplace allowlist, everything else blocked here.\")"
+    },
+    {
+      "schema": "CommandMessage2",
+      "field": "statusLine",
+      "rhs": "y.object({type:y.literal(\"command\"),command:y.string(),padding:y.number().optional(),refreshInterval:y.number().min(1).optional().catch(void 0).describe(\"Re-run the status line command every N seconds in addition to event-driven updates\"),hideVimModeIndicator:y.boolean().optional().describe(\"Hide the built-in `-- INSERT --` / `-- VISUAL --` indicator below the prompt. Use this when your status line script renders `vim.mode` itself.\")}).optional().describe(\"Custom status line display configuration\")"
+    },
+    {
+      "schema": "CommandMessage2",
+      "field": "extraKnownMarketplaces",
+      "rhs": "y.record(y.string(),Uk4()).check((_)=>{for(let[q,K]of Object.entries(_.value))if(K.source.source===\"settings\"&&K.source.name!==q)_.issues.push({code:\"custom\",input:K.source.name,path:[q,\"source\",\"name\"],message:`Settings-sourced marketplace name must match its extraKnownMarketplaces key (got key \"${q}\" but source.name \"${K.source.name}\")`})}).optional().describe(\"Additional marketplaces to make available for this repository. Typically used in repository .claude/settings.json to ensure team members have required plugin sources.\")"
+    },
+    {
+      "schema": "CommandMessage2",
+      "field": "viewMode",
+      "rhs": "y.enum([\"default\",\"verbose\",\"focus\"]).optional().catch(void 0).describe(\"Default transcript view mode on startup\")"
+    },
+    {
+      "schema": "CommandMessage2",
+      "field": "feedbackSurveyRate",
+      "rhs": "y.number().min(0).max(1).optional().describe(\"Probability (0\\u20131) that the session quality survey appears when eligible. 0.05 is a reasonable starting point.\")"
+    },
+    {
+      "schema": "CommandMessage2",
+      "field": "effortLevel",
+      "rhs": "y.enum([\"low\",\"medium\",\"high\",\"xhigh\"]).optional().catch(void 0).describe(\"Persisted effort level for supported models.\")"
+    },
+    {
+      "schema": "CommandMessage2",
+      "field": "autoCompactWindow",
+      "rhs": "y.number().int().min(1e5).max(1e6).optional().catch(void 0).describe(\"Auto-compact window size\")"
+    },
+    {
+      "schema": "CommandMessage2",
+      "field": "theme",
+      "rhs": "y.union([y.enum(Ib6),y.string().startsWith(\"custom:\").transform((_)=>_)]).optional().catch(void 0).describe(\"Color theme for the UI\")"
+    },
+    {
+      "schema": "CommandMessage2",
+      "field": "editorMode",
+      "rhs": "y.enum(cE_).optional().catch(void 0).describe(\"Key binding mode for the prompt input\")"
+    },
+    {
+      "schema": "CommandMessage2",
+      "field": "preferredNotifChannel",
+      "rhs": "y.enum(dE_).optional().catch(void 0).describe(\"Preferred OS notification channel\")"
+    },
+    {
+      "schema": "CommandMessage2",
+      "field": "teammateMode",
+      "rhs": "y.enum(Czq).optional().catch(void 0).describe(\"How spawned teammates execute (tmux, in-process, auto)\")"
+    },
+    {
+      "schema": "CommandMessage4",
+      "field": "refreshInterval",
+      "rhs": "y.number().min(1).optional().catch(void 0).describe(\"Re-run the status line command every N seconds in addition to event-driven updates\")"
+    },
+    {
+      "schema": "ImageMessage",
+      "field": "file",
+      "rhs": "y.object({base64:y.string().describe(\"Base64-encoded image data\"),type:H.describe(\"The MIME type of the image\"),originalSize:y.number().describe(\"Original file size in bytes\"),dimensions:y.object({originalWidth:y.number().optional().describe(\"Original image width in pixels\"),originalHeight:y.number().optional().describe(\"Original image height in pixels\"),displayWidth:y.number().optional().describe(\"Displayed image width in pixels (after resizing)\"),displayHeight:y.number().optional().describe(\"Displayed image height in pixels (after resizing)\")}).optional().describe(\"Image dimension info for coordinate mapping\")})"
+    },
+    {
+      "schema": "McpToolMessage",
+      "field": "if",
+      "rhs": "I8_()"
+    },
+    {
+      "schema": "PromptMessage",
+      "field": "if",
+      "rhs": "I8_()"
+    }
+  ]
+}

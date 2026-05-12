@@ -1,0 +1,11 @@
+{
+  "extractor": {
+    "anonymousInline": 506,
+    "boundToNamedIdent": 437,
+    "topLevelSubtypeDiscriminants": 57,
+    "topLevelTypeDiscriminants": 101,
+    "totalSchemaDefiningCallSites": 1024,
+    "uniqueLazyWrapperAliases": 1,
+    "uniqueZodAliases": 15
+  }
+}
