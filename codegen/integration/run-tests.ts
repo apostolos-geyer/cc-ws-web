@@ -40,6 +40,88 @@ interface RunOptions {
   only?: string;
 }
 
+/**
+ * Build the env that gets handed to the spawned `claude`. Inherits
+ * `process.env` for the basics (HOME, PATH, USER, LANG, …) but drops any
+ * variable whose name looks secret-bearing. The MCP / settings flags
+ * upstream already prevent secrets from being read out of the user's
+ * settings file, but env-derived secrets (PostHog SDK keys, third-party
+ * tokens consumed by hooks or plugins) can still ride in unless we filter.
+ *
+ * Allowlist would be safer in principle but the binary's transitive
+ * dependencies (git, gh, mcp tooling) reach into more env vars than is
+ * practical to enumerate — denylist with a wide pattern is the pragmatic
+ * choice.
+ */
+function scrubbedEnv(): Record<string, string> {
+  const SECRET_PATTERNS = [
+    /\b(api[_-]?key)\b/i,
+    /\b(secret)\b/i,
+    /\b(token)\b/i,
+    /\b(password|passwd|pwd)\b/i,
+    /\b(client[_-]?secret)\b/i,
+    /\b(client[_-]?id)\b/i,
+    /\b(access[_-]?key)\b/i,
+    /\b(private[_-]?key)\b/i,
+    /\bposthog\b/i,
+    /\bdatadog\b/i,
+    /\bsentry\b/i,
+    /\bgithub[_-]?(token|pat)\b/i,
+    /\b(slack[_-]?(token|webhook))\b/i,
+    /\b(openai|claude)[_-]?(api[_-]?key|token)\b/i,
+    /\bcredentials?\b/i,
+  ];
+  const KEEP_DESPITE_PATTERN = new Set([
+    // Anthropic's official env entry — the binary explicitly checks for it.
+    // If a developer has it set, let them use it; we're not capturing its
+    // value in fixtures (frames only echo configured MCP servers).
+    "ANTHROPIC_API_KEY",
+  ]);
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (v === undefined) continue;
+    if (KEEP_DESPITE_PATTERN.has(k)) {
+      out[k] = v;
+      continue;
+    }
+    if (SECRET_PATTERNS.some((re) => re.test(k))) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+/**
+ * Last-line-of-defense secret scanner. Runs over every captured frame
+ * before it's written to a fixture file. If any value in the frame's
+ * payload matches a known-secret pattern (PostHog phx_/phc_ keys,
+ * GitHub PATs, AWS keys, generic high-entropy candidates against
+ * known prefixes), the capture is aborted with a loud error and the
+ * fixture is NOT written. Prevents a future regression from re-leaking
+ * the same kind of secret.
+ *
+ * This is paranoid: even if MCP is off and env is scrubbed, a hook
+ * stdout or a slash-command's output could embed a secret. Block at
+ * the fixture boundary so it never lands in `git add`.
+ */
+function scanFrameForSecrets(raw: string): string | null {
+  const PATTERNS: Array<[string, RegExp]> = [
+    ["PostHog personal key", /\bphx_[A-Za-z0-9_-]{20,}\b/],
+    ["PostHog project key", /\bphc_[A-Za-z0-9]{32,}\b/],
+    ["GitHub fine-grained PAT", /\bgithub_pat_[A-Za-z0-9_]{50,}\b/],
+    ["GitHub classic PAT", /\bghp_[A-Za-z0-9]{36,}\b/],
+    ["GitHub OAuth token", /\bgho_[A-Za-z0-9]{36,}\b/],
+    ["AWS access key", /\bAKIA[A-Z0-9]{16}\b/],
+    ["Slack token", /\bxox[abprs]-[A-Za-z0-9-]{10,}\b/],
+    ["Anthropic API key", /\bsk-ant-[A-Za-z0-9_-]{40,}\b/],
+    ["OpenAI API key", /\bsk-[A-Za-z0-9]{32,}\b/],
+    ["Generic private key block", /-----BEGIN [A-Z ]*PRIVATE KEY-----/],
+  ];
+  for (const [name, re] of PATTERNS) {
+    if (re.test(raw)) return name;
+  }
+  return null;
+}
+
 function parseArgs(argv: string[]): RunOptions {
   let binary = `/Users/stoli/.local/share/claude/versions/${ACTIVE_VERSION}`;
   let updateFixtures = false;
@@ -86,6 +168,20 @@ async function runOne(test: BinaryTest, opts: RunOptions): Promise<CapturedTest>
     "--no-session-persistence",
     "--permission-mode",
     "plan",
+    // Skip the user-scope settings file (`~/.claude/settings.json`) and any
+    // project / local files outside cwd. Without this, fixtures absorbed
+    // whatever the developer had configured locally — including MCP server
+    // env-var args carrying real PostHog / API keys. `local` is the
+    // narrowest scope; only this-dir settings get applied.
+    "--setting-sources",
+    "local",
+    // Drop every MCP server defined at any settings scope, then supply an
+    // empty `--mcp-config` so the binary loads zero MCP servers for this
+    // run. Together these prevent the init frame from echoing any MCP
+    // server config (which is where most secrets leak).
+    "--strict-mcp-config",
+    "--mcp-config",
+    JSON.stringify({ mcpServers: {} }),
     ...(test.spawnArgs ?? []),
   ];
   const frames: CapturedFrame[] = [];
@@ -95,6 +191,7 @@ async function runOne(test: BinaryTest, opts: RunOptions): Promise<CapturedTest>
     args,
     idleTimeoutMs: 15_000,
     onStderr: (line) => stderr.push(line),
+    env: scrubbedEnv(),
   });
 
   // Per-test predicate-driven step replay.
@@ -104,6 +201,19 @@ async function runOne(test: BinaryTest, opts: RunOptions): Promise<CapturedTest>
     | null = null;
 
   harness.onFrame((frame, raw) => {
+    // Belt-and-suspenders secret scan. If this fires it means the MCP
+    // disable + env scrub + setting-sources flag let something through —
+    // a hook stdout, a slash-command output, a plugin echo. Refuse to
+    // write the fixture; force the dev to investigate.
+    const hit = scanFrameForSecrets(raw);
+    if (hit) {
+      throw new Error(
+        `[run-tests] aborting: captured frame contains a ${hit}. ` +
+          `Refusing to write fixture for test "${test.name}". ` +
+          `Investigate which env var / hook / plugin emitted it; consider adding ` +
+          `the source pattern to scrubbedEnv() in run-tests.ts.`,
+      );
+    }
     frames.push({ raw, parsed: frame });
     if (pendingPredicate && pendingPredicate(frame)) {
       const r = pendingResolve!;
