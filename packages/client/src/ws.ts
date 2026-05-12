@@ -1,7 +1,20 @@
-// Does NOT auto-reconnect. NDJSON on the wire: each send is a single JSON
-// object; bridge splits inbound on `\n`.
+// WS client — thin nanostores facade over `wsClientTransport` from
+// `@somewhatintelligent/cc-protocol`. Phase 4: the actual socket plumbing
+// moved to the protocol package's universal transport; this file keeps the
+// existing `WsClient` contract (status atom, lastError atom, connect /
+// disconnect / send / onFrame) so `createCcSession` and tests don't need
+// to change.
+//
+// Does NOT auto-reconnect by default — preserves the existing behavior of
+// `createWsClient`. Consumers who want reconnect should switch to
+// `createReactiveClient` from `./reactive.ts` which wires the same transport
+// with backoff configured.
+//
+// NDJSON on the wire: each send is a single JSON object; bridge splits
+// inbound on `\n`.
 
 import { atom, type WritableAtom } from "nanostores";
+import { wsClientTransport, type WsClientTransport } from "@somewhatintelligent/cc-protocol/transport/ws-client";
 import type { InboundFrame, OutboundFrame } from "./protocol";
 
 export type WsStatus =
@@ -29,59 +42,75 @@ export function createWsClient(opts: {
   const status = atom<WsStatus>("idle");
   const lastError = atom<string | null>(null);
   const handlers = new Set<(f: InboundFrame) => void>();
-  let ws: WebSocket | null = null;
+  let transport: WsClientTransport | null = null;
+  let unsubFrame: (() => void) | null = null;
+  let disconnected = false;
 
   function connect() {
-    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    if (transport && !transport.closed) {
       return;
     }
+    disconnected = false;
     status.set("connecting");
     lastError.set(null);
-    ws = new WebSocket(opts.url);
-    ws.onopen = () => status.set("open");
-    ws.onclose = () => {
-      ws = null;
-      status.set("closed");
-    };
-    ws.onerror = () => {
-      lastError.set("ws error");
-      status.set("error");
-    };
-    ws.onmessage = (e) => {
-      const text = typeof e.data === "string" ? e.data : "";
-      if (!text) return;
-      opts.onTrace?.("in", text);
-      let parsed: InboundFrame;
+    transport = wsClientTransport(opts.url, {
+      onOpen() {
+        status.set("open");
+      },
+      onSocketClose() {
+        // Only flip if the user didn't explicitly disconnect (otherwise
+        // disconnect() already set the state).
+        if (!disconnected) status.set("closed");
+        if (transport && !transport.closed) {
+          // Reconnect disabled — drop the transport handle.
+          transport = null;
+        }
+      },
+    });
+    unsubFrame = transport.onFrame((frame) => {
+      // The protocol transport already JSON.parses; mirror the trace shape
+      // the legacy client emitted (line-form).
       try {
-        parsed = JSON.parse(text);
+        opts.onTrace?.("in", JSON.stringify(frame));
       } catch {
-        // One bad frame must not take down the session
-        return;
+        // ignore JSON errors in trace
       }
       for (const h of handlers) {
         try {
-          h(parsed);
+          h(frame as InboundFrame);
         } catch (err) {
           // One handler throwing must not stop the others
           console.error("[ws] handler error", err);
         }
       }
-    };
+    });
   }
 
   function disconnect() {
-    if (ws) {
-      try { ws.close(); } catch {}
-      ws = null;
+    disconnected = true;
+    if (unsubFrame) {
+      unsubFrame();
+      unsubFrame = null;
+    }
+    if (transport) {
+      transport.close().catch(() => undefined);
+      transport = null;
     }
     status.set("closed");
   }
 
   function send(frame: OutboundFrame) {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    const line = JSON.stringify(frame);
-    opts.onTrace?.("out", line);
-    ws.send(line);
+    if (!transport || transport.closed) return;
+    try {
+      opts.onTrace?.("out", JSON.stringify(frame));
+    } catch {
+      // ignore
+    }
+    transport.send(frame).catch((err: unknown) => {
+      // wsClientTransport rejects when not open; legacy behavior was a
+      // silent drop. Preserve that.
+      console.warn("[ws] send rejected:", err);
+    });
   }
 
   function onFrame(handler: (f: InboundFrame) => void) {

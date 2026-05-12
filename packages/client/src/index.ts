@@ -107,3 +107,18 @@ export type {
   Model,
   Effort,
 } from "./modes";
+
+// Phase 4: thin reactive facade over `ClaudeClient` from `@cc-protocol`.
+// This is an *additive* low-level entry point for consumers who want raw
+// access to the protocol-package client; `createCcSession` remains the
+// canonical higher-level API.
+export { createReactiveClient } from "./reactive";
+export type { ReactiveClient, ReactiveClientOptions } from "./reactive";
+
+// Phase 4: re-export the protocol package's principals so callers can
+// `import { ClaudeClient } from "@somewhatintelligent/cc-ws-client"` if
+// they prefer one dep.
+export { ClaudeClient } from "@somewhatintelligent/cc-protocol/client";
+export type { ClientState } from "@somewhatintelligent/cc-protocol/client";
+export { wsClientTransport } from "@somewhatintelligent/cc-protocol/transport/ws-client";
+export type { Transport, Frame } from "@somewhatintelligent/cc-protocol/transport";
