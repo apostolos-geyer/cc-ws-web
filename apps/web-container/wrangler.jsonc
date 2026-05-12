@@ -1,0 +1,53 @@
+{
+  // Minimal Workers + Cloudflare Sandbox demo app.
+  //
+  // No envs (staging/production), no D1, no auth bindings. Everything the
+  // app needs (Claude credential, optional GitHub PAT + repo URL) is
+  // supplied by the operator's browser per-session — see README.md.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cc-ws-container",
+  "main": "./src/worker.ts",
+  "compatibility_date": "2026-04-19",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  // SPA assets built by vite. `single-page-application` makes 404s fall back
+  // to index.html so deep links work; the worker's fetch handler claims the
+  // dynamic routes (/init/:id, /ws/:id) before assets are reached.
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+
+  // One sandbox container class. The image installs claude + cc-ws-server
+  // globally so `session.startProcess("cc-ws-server", ...)` resolves on
+  // $PATH (see Dockerfile).
+  "containers": [
+    {
+      "class_name": "Sandbox",
+      "image": "./Dockerfile",
+      "instance_type": "basic",
+      "max_instances": 10
+    }
+  ],
+
+  // Sandbox SDK ships the Container DO class; we just bind it.
+  "durable_objects": {
+    "bindings": [
+      { "name": "Sandbox", "class_name": "Sandbox" }
+    ]
+  },
+
+  // Append-only — never edit a published tag. Demo only, but we keep the
+  // shape consistent with how real CF Container migrations are declared.
+  // Migrations only register *stateful Durable Object* classes. `Sandbox` is
+  // a DO subclass (extends `@cloudflare/sandbox`'s BaseSandbox → Container
+  // → DurableObject); `ContainerProxy` is a `WorkerEntrypoint`, not a DO,
+  // so it does NOT belong here — the runtime reaches it via
+  // `ctx.exports.ContainerProxy` purely from the worker's exports
+  // (see src/worker.ts: `export { ContainerProxy } from "@cloudflare/sandbox"`).
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Sandbox"] }
+  ]
+}

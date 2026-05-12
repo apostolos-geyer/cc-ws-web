@@ -67,6 +67,7 @@ flowchart LR
 | --- | --- | --- |
 | [`apps/web`](apps/web) | Svelte 5 + Vite | Mounts `<cc-ws-chat>` from `packages/element`. Runs the bridge concurrently via `bun --hot ../../packages/server/src/server.ts`. |
 | [`apps/web-react`](apps/web-react) | React 19 + `Bun.serve` | Single-process app: Bun serves HTML + bundled `client.tsx` and hosts the bridge at `/ws`. |
+| [`apps/web-container`](apps/web-container) | Svelte 5 + Vite + `@cloudflare/sandbox` | Bridge runs inside a per-session Cloudflare Sandbox container; worker proxies WS via `wsConnect`. Mirrors slopbox's container substrate (per-session credential injection, GitHub PAT-as-outbound-proxy, idempotent `/init`) without auth / D1 / dashboards. |
 
 ### Package dependency graph
 
@@ -80,6 +81,7 @@ flowchart TB
     cc-ws-element["@cc-ws-element"]
     apps-web["apps/web<br/>(svelte)"]
     apps-web-react["apps/web-react"]
+    apps-web-container["apps/web-container<br/>(svelte + cf sandbox)"]
     arktype["arktype"]
     nanostores["nanostores"]
 
@@ -94,6 +96,8 @@ flowchart TB
     apps-web --> cc-ws-server
     apps-web-react --> cc-ws-react
     apps-web-react --> cc-ws-server
+    apps-web-container --> cc-ws-element
+    apps-web-container -. "runs cc-ws-server inside CF Sandbox container" .-> cc-ws-server
 ```
 
 ## End-to-end frame flow
@@ -217,6 +221,9 @@ bun --filter './apps/web' dev
 
 # React reference (Bun serves HTML + bridge from one process)
 bun --filter './apps/web-react' dev
+
+# Cloudflare Sandbox container reference (Svelte + bridge inside a CF Sandbox)
+bun --filter './apps/web-container' dev    # needs Docker (or OrbStack / Colima)
 
 # Build the <cc-ws-chat> embed bundle
 bun --filter '@somewhatintelligent/cc-ws-element' build

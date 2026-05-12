@@ -15,6 +15,9 @@ dist-embed/
 .svelte-kit/
 .vite/
 
+# Wrangler local dev state (DO sqlite, container migrations, cached configs)
+.wrangler/
+
 # Local scratch / test artifacts
 .perm-test*.txt
 _dev.log
