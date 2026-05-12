@@ -1,6 +1,10 @@
 node_modules/
 .env
 .env.local
+# release.yml writes a token-bearing .npmrc at job start; changesets'
+# `git add .` inside `bun run version` would otherwise sweep it into the
+# version-bump commit and GitHub secret scanning blocks the push.
+.npmrc
 .DS_Store
 *.log
 bun.lockb
