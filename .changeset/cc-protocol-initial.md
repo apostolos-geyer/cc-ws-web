@@ -12,9 +12,26 @@ Contents:
   the `codegen/` pipeline. Discriminator-keyed dispatch maps (`inboundByType`,
   `inboundBySubtype`) for O(1) frame routing.
 - **`ClaudeClient`** (`./client`) — consumer-side principal. Wraps a
-  `Transport`, translates intent calls (`setPermissionMode`, `interrupt`,
-  `sendUserMessage`, …) into typed frames, correlates `request_id`s,
-  tracks session/message/task state via an observable `ClientState`.
+  `Transport`, translates intent calls (`setPermissionMode`, `setModel`,
+  `setMaxThinkingTokens`, `interrupt`, `sendUserMessage`, `bashCommand`,
+  `stopTask`, `endSession`, `getSettings` / `getContextUsage` / `getSessionCost`
+  / `getBinaryVersion` / `fileSuggestions` / `mcpStatus` / `reloadPlugins` /
+  `applyFlagSettings` / `seedReadState`, `respondToPermission`,
+  `sendShellContext`, `sendBashSideChannel`, `dismissShellEntry`) into typed
+  frames, correlates `request_id`s back to promises, and tracks rich session
+  state via an observable `ClientState`:
+  - `sessionId` / `sessionState` / `init` (cwd, agents, slashCommands, skills)
+  - `activeMode` / `pendingMode` / `modeError` (set_permission_mode round-trip)
+  - `activeModel` / `pendingModel` / `modelError` (set_model round-trip)
+  - `messages: MessageEntry[]` with streaming-bubble assembly
+    (message_start → content_block_* → message_stop) producing
+    LocalUserEntry / FrameEntry / StreamingEntry
+  - `tasks: TaskEntry[]` driven off `system/task_*` frames with
+    sub-agent `parent_tool_use_id` transcript routing
+  - `shellEntries: ShellEntry[]` with bash side-channel XML capture
+  - `hookEvents: HookEntry[]` ring-buffered
+  - `pendingPermissions: PendingPermission[]` UI-shape queue plus an
+    optional low-level `onPermissionRequest` callback
 - **`ClaudeProcess`** (`./process`) — binary-side principal. Wraps a
   `Transport`, drives the lifecycle handshake (`initialize` / `end_session`),
   validates inbound frames against the generated schemas, exposes

@@ -2,21 +2,49 @@
 "@somewhatintelligent/cc-ws-client": minor
 ---
 
-Phase 4 of the protocol architecture refactor.
+Internal refactor: state aggregation moved to `@somewhatintelligent/cc-protocol/client`.
 
-- The underlying WebSocket plumbing (`ws.ts`) now wraps `wsClientTransport`
-  from `@somewhatintelligent/cc-protocol/transport/ws-client`. The public
-  `WsClient` contract is unchanged — same status / lastError atoms, same
-  connect / disconnect / send / onFrame surface — so the `createCcSession`
-  factory, all its atoms, methods, and the React/Svelte adapters continue
-  to work unchanged.
-- New additive entry point: `createReactiveClient` (`./reactive` subpath)
-  — a thin nanostores facade over `ClaudeClient` from
-  `@somewhatintelligent/cc-protocol/client`. Useful for consumers who
-  want raw access to the protocol-package client; `createCcSession`
-  remains the canonical higher-level API.
-- New direct re-exports from the protocol package: `ClaudeClient`,
-  `wsClientTransport`, `Transport`, `Frame`, `ClientState` — so callers
-  can `import { ClaudeClient } from "@somewhatintelligent/cc-ws-client"`
-  if they prefer a single workspace dep.
-- New runtime dependency: `@somewhatintelligent/cc-protocol`.
+`cc-ws-client` is now a thin nanostores + persistence facade over
+`ClaudeClient`. Every public symbol the v0.1.4 package exported is still
+exported with the same name and a type-compatible shape, so React,
+Svelte, and element packages — plus consuming apps — need no code
+changes.
+
+What moved into `@cc-protocol/client`:
+
+- The `MessageEntry` streaming-bubble reducer (`messages.ts` →
+  `@cc-protocol/client/messages.ts`).
+- The `TaskEntry` state machine + sub-agent transcript routing
+  (`tasks.ts` → `@cc-protocol/client/tasks.ts`).
+- The `ShellEntry` bash side-channel aggregator + `parseBashFrame` /
+  `buildBashXml` helpers (`shell.ts` → `@cc-protocol/client/shell.ts`).
+- The `HookEntry` ring-buffer (extracted from `session.ts` →
+  `@cc-protocol/client/hooks.ts`).
+- The `PendingPermission` UI-shape queue + `respondToPermission`
+  (`permissions.ts` → `@cc-protocol/client/permissions.ts`).
+- The control-request `RequestIdCorrelator` (`controls.ts` →
+  `@cc-protocol/client/correlate.ts`).
+- The transport layer (`ws.ts` → `@cc-protocol/transport/ws-client`).
+
+What stays in `cc-ws-client`:
+
+- `reactive.ts` — the `createCcSession` factory + the smaller
+  `createReactiveClient`. Mirrors `ClaudeClient.getSnapshot()` into
+  nanostores atoms (`atoms.messages`, `atoms.tasks`, `atoms.shellEntries`,
+  `atoms.hookEvents`, `atoms.pendingPermissions`, `atoms.activeMode`, …),
+  owns the WsStatus atom, the auto-clearing modeError / modelError
+  timers, the `_local:respawn` flow with `@cc-ws-server`, effort
+  tracking (which requires a respawn — there's no `set_effort`
+  control_request), and the `connect()` / `disconnect()` lifecycle.
+- `persistence.ts` — localStorage hydration writer.
+- `modes.ts` — the web-only PermissionMode / Model / Effort catalog.
+- `protocol.ts` — re-exports wire-frame types from `@cc-protocol` +
+  the web-only `SessionMode` data type + `buildSpawnArgs` (`--continue`
+  / `--resume` CLI args are a runtime concern, not in the universal
+  core) + the `_local:respawn` frame types.
+- `usage.ts` — the `sumContextTokens` / `getFrameUsage` helpers.
+
+Test seam: `createCcSession` takes a new `testTransport` option that
+replaces the legacy `wsClient: WsClient` injection.
+
+Now depends on `@somewhatintelligent/cc-protocol`.
