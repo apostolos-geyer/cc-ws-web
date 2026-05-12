@@ -1,5 +1,12 @@
 # @somewhatintelligent/cc-ws-svelte
 
+## 0.1.7
+
+### Patch Changes
+
+- Updated dependencies [3eb13bc]
+  - @somewhatintelligent/cc-ws-client@0.2.0
+
 ## 0.1.6
 
 ### Patch Changes

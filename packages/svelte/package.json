@@ -1,6 +1,6 @@
 {
   "name": "@somewhatintelligent/cc-ws-svelte",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Svelte 5 adapter for the cc-ws reactive client; typed context injection plus re-exports.",
   "license": "MIT",
   "type": "module",

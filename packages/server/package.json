@@ -1,6 +1,6 @@
 {
   "name": "@somewhatintelligent/cc-ws-server",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "Bun WebSocket server fronting Claude Code via NDJSON over stream-json. The container-side bridge for cc-ws.",
   "license": "MIT",
   "type": "module",
