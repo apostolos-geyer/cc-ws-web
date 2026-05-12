@@ -63,19 +63,41 @@ bun codegen/check-gaps.ts \
 | `report.md` | no | Human-readable summary: counts, discriminators, kind breakdown. Glanceable; not authoritative. |
 | `raw.js` | no | One schema body per line, prefixed by its binding name (or `<anon>`). Grep target — find every site that references a given helper, find unusual body shapes, etc. |
 
-## Bump workflow
+## Bumping the binary version
 
-The full bump procedure is encoded in `.claude/skills/regen-protocol/` (added in phase 3). Sketch:
+The full bump procedure lives in `.claude/skills/regen-protocol/SKILL.md`
+— invoke that skill when the user says "bump claude protocol", "regen
+claude schemas", or "claude binary updated". It walks 13 steps end-to-end
+and lands at a green `bun codegen/checkpoint.ts`.
 
-1. New binary lands → run `extract` against it → new `snapshots/<new-ver>/canonical.json` + `binary-metadata.json`.
-2. `compare` against the previous version → `drift/<from>-to-<to>.md`.
-3. Seed `snapshots/<new-ver>/patches.ts` from the previous version's patches.
-4. Walk the drift list; update patches for changed/added schemas.
-5. `generate.ts` (phase 2) emits the new `packages/protocol/generated/<new-ver>/{schemas,types,dispatch}.ts`.
-6. Replay existing fixtures against the new schemas; failures triage into `failures.md`.
-7. Re-record integration fixtures against the new binary.
-8. Update `codegen/version.ts` `ACTIVE_VERSION` / `ACTIVE_BINARY_SHA256` / `ACTIVE_NPM_PACKAGE_VERSION`.
-9. `verify-package.ts` gates publish.
+The high-level loop:
+
+1. New binary lands → `bun codegen/extract.ts extract <bin> --out
+   codegen/snapshots/<new>` → new `canonical.json` + `binary-metadata.json`.
+2. `bun codegen/extract.ts compare <old>/canonical.json
+   <new>/canonical.json --out codegen/snapshots/drift` → drift report.
+3. `cp codegen/snapshots/<old>/patches.ts
+   codegen/snapshots/<new>/patches.ts` → seed.
+4. Update `codegen/version.ts` `ACTIVE_VERSION` / `ACTIVE_BINARY_SHA256`
+   / `ACTIVE_NPM_PACKAGE_VERSION`; update `packages/protocol/src/index.ts`'s
+   `export * from "../generated/<new>/schemas"` line; update the
+   `expect(ACTIVE_VERSION).toBe(...)` assertion in `packages/protocol/__tests__/types.test.ts`.
+5. Walk the drift list; author patches in `<new>/patches.ts` for
+   changed / added schemas, citing source in each `reason` string. Each
+   structural decision references the leaked source at
+   `../claude-code/src/entrypoints/sdk/` for **shape only** — never copy
+   text.
+6. `bun codegen/generate.ts` — coverage report; loop steps 5-6 until
+   acceptable.
+7. `bun codegen/integration/run-tests.ts --update-fixtures` — re-record
+   integration fixtures against the new binary. Any new subtype the
+   binary emits that lacks a test gets a stub entry in
+   `codegen/integration/tests.ts` before re-recording.
+8. `bun codegen/checkpoint.ts` — all 10 gates must pass.
+9. `bun changeset` — minor (additive schemas) or major (breaking shapes)
+   bump on `@cc-protocol`; patch bumps on consumers that pick it up.
+10. `bun codegen/verify-package.ts` — pre-publish guard.
+11. `bun test` — all packages, all tests.
 
 ## Future work
 

@@ -105,6 +105,9 @@
       "bin": {
         "cc-ws-server": "bin/cc-ws-server.js",
       },
+      "dependencies": {
+        "@somewhatintelligent/cc-protocol": "workspace:^",
+      },
     },
     "packages/svelte": {
       "name": "@somewhatintelligent/cc-ws-svelte",

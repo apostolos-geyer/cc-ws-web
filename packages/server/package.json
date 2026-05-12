@@ -7,7 +7,10 @@
   "main": "./src/server.ts",
   "types": "./src/server.ts",
   "exports": {
-    ".": "./src/server.ts"
+    ".": "./src/server.ts",
+    "./transport/stdio": "./src/transport/stdio.ts",
+    "./transport/ws-server": "./src/transport/ws-server.ts",
+    "./transport/spawn": "./src/transport/spawn.ts"
   },
   "bin": {
     "cc-ws-server": "bin/cc-ws-server.js"
@@ -19,6 +22,9 @@
   ],
   "publishConfig": {
     "access": "public"
+  },
+  "dependencies": {
+    "@somewhatintelligent/cc-protocol": "workspace:^"
   },
   "scripts": {
     "start": "bun src/server.ts",

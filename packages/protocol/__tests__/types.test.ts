@@ -27,6 +27,12 @@ import {
   ACTIVE_VERSION,
 } from "../src/index";
 
+import type { Transport } from "../src/transport/index";
+import { ClaudeClient } from "../src/client";
+import { ClaudeProcess } from "../src/process";
+import { bufferTransport } from "../src/transport/buffer";
+import { inMemoryPair } from "../src/transport/in-memory-pair";
+
 // Each runtime schema constant carries an inferred TS type at `typeof X.infer`.
 // Alias them locally so the type-level assertions read naturally.
 type InitializeRequestT = typeof InitializeRequest.infer;
@@ -185,5 +191,36 @@ describe("type-level assertions (compile-time)", () => {
     void narrow;
 
     expect(true).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 3 surface: Transport + principals.
+// ---------------------------------------------------------------------------
+describe("Phase 3 surface", () => {
+  test("bufferTransport returns a Transport", () => {
+    const h = bufferTransport();
+    const _t: Transport = h.transport;
+    expect(typeof _t.send).toBe("function");
+    expect(typeof _t.onFrame).toBe("function");
+    expect(typeof _t.close).toBe("function");
+    expect(typeof _t.closed).toBe("boolean");
+  });
+
+  test("inMemoryPair returns two Transports", () => {
+    const [a, b] = inMemoryPair();
+    const _ta: Transport = a;
+    const _tb: Transport = b;
+    expect(typeof _ta.send).toBe("function");
+    expect(typeof _tb.send).toBe("function");
+  });
+
+  test("ClaudeClient + ClaudeProcess construct over a Transport", () => {
+    const h = bufferTransport();
+    const client = new ClaudeClient(h.transport);
+    const proc = new ClaudeProcess(h.transport);
+    expect(typeof client.getSnapshot).toBe("function");
+    expect(typeof proc.getState).toBe("function");
+    expect(proc.getState()).toBe("idle");
   });
 });

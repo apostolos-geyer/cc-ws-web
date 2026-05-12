@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * One-command runner for the Phase 2 Checkpoint #1 gate set.
+ * One-command runner for Checkpoint #1 (Phase 2) + Checkpoint #2 (Phase 3).
  *
  * Each gate runs as a subprocess so a failure in one doesn't take down the
  * rest of the suite. The runner prints a colored ✓/✗ table on stderr and
@@ -11,7 +11,7 @@
  * Invocation:
  *   bun codegen/checkpoint.ts
  *
- * Gates:
+ * Gates (Checkpoint #1 — Phase 2):
  *   1. extractor reproducibility (extract.ts byte-identical against
  *      committed canonical.json)
  *   2. generate.ts idempotence (byte-identical against committed
@@ -25,6 +25,13 @@
  *   9. simulated-drift smoke (3 separate drift cases, each must trip a
  *      distinct gate; we revert after)
  *  10. outside-island diff (git diff --stat excluding the island paths)
+ *
+ * Gates (Checkpoint #2 — Phase 3):
+ *  11. bun test packages/server/__tests__/
+ *  12. browser-safety grep over packages/protocol/src/
+ *  13. server isolation check (no diff in server.ts / client/src/ / apps/)
+ *  14. packages/server tsc clean
+ *  15. opt-in live-binary E2E (CC_PROTOCOL_LIVE_BINARY=1)
  */
 
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
@@ -252,16 +259,23 @@ async function main() {
   }
 
   // Gate 10: outside-island diff. The island for Phase 2 is the codegen
-  // pipeline + the protocol package. We also exempt `bun.lock` (arktype
-  // dep added) and `.gitignore` (we un-ignored integration-fixtures and
-  // coverage.json, both committed island artifacts) — the changes are
-  // small, audit-reviewed, and required for the package to ship.
+  // pipeline + the protocol package. Phase 3 extends the island to include
+  // packages/server/src/transport/, packages/server/__tests__/,
+  // packages/server/package.json, packages/server/tsconfig.json, and
+  // .claude/skills/. We also exempt `bun.lock` (workspace dep added) and
+  // `.gitignore` (we un-ignored integration-fixtures and coverage.json).
   const r10 = run("git", [
     "diff",
     "--stat",
     "--",
     ":!codegen/",
     ":!packages/protocol/",
+    ":!packages/server/src/transport/",
+    ":!packages/server/__tests__/",
+    ":!packages/server/package.json",
+    ":!packages/server/tsconfig.json",
+    ":!packages/server/README.md",
+    ":!.claude/skills/",
     ":!bun.lock",
     ":!.gitignore",
   ]);
@@ -274,6 +288,61 @@ async function main() {
       "fail",
       `non-empty diff:\n${outsideDiff}`,
     );
+  }
+
+  // -------------------------------------------------------------------
+  // Checkpoint #2 (Phase 3) gates
+  // -------------------------------------------------------------------
+
+  // Gate 11: bun test packages/server/__tests__/.
+  const SERVER_DIR = join(REPO_ROOT, "packages", "server");
+  const r11 = run("bun", ["test"], { cwd: SERVER_DIR });
+  if (r11.status === 0) record("bun test (server)", "pass");
+  else record("bun test (server)", "fail", `exit ${r11.status}\n${r11.stderr.slice(0, 1000)}`);
+
+  // Gate 12: browser-safety grep — no Bun/Node refs in protocol src.
+  const r12 = run("grep", [
+    "-rE",
+    "Bun\\.|node:|require\\(\"node|process\\.spawn",
+    "packages/protocol/src/",
+  ]);
+  // grep exit code: 0 = match found, 1 = no match (what we want), 2 = error.
+  if (r12.status === 1) record("browser-safety grep", "pass", "no Node/Bun refs in protocol src");
+  else if (r12.status === 0) record("browser-safety grep", "fail", `matches:\n${r12.stdout}`);
+  else record("browser-safety grep", "fail", `grep error exit ${r12.status}`);
+
+  // Gate 13: server isolation — server.ts / client/src/ / apps/ untouched.
+  const r13 = run("git", [
+    "diff",
+    "packages/server/src/server.ts",
+    "packages/client/src/",
+    "apps/",
+  ]);
+  const iso = (r13.stdout || "").trim();
+  if (iso === "") record("server isolation check", "pass");
+  else record("server isolation check", "fail", `diffs in protected paths:\n${iso.slice(0, 500)}`);
+
+  // Gate 14: server tsc clean.
+  const r14 = run("bunx", ["tsc", "--noEmit", "-p", "."], { cwd: SERVER_DIR });
+  if (r14.status === 0) record("packages/server tsc", "pass");
+  else record("packages/server tsc", "fail", `exit ${r14.status}\n${r14.stdout.slice(0, 1000)}`);
+
+  // Gate 15: opt-in live-binary E2E (CC_PROTOCOL_LIVE_BINARY=1).
+  if (!existsSync(BINARY_PATH)) {
+    record("live-binary E2E (opt-in)", "skip", "binary missing");
+  } else {
+    const r15 = spawnSync(
+      "bun",
+      ["test", "__tests__/live.test.ts"],
+      {
+        cwd: SERVER_DIR,
+        encoding: "utf8",
+        env: { ...process.env, CC_PROTOCOL_LIVE_BINARY: "1" },
+        stdio: "pipe",
+      },
+    );
+    if (r15.status === 0) record("live-binary E2E (opt-in)", "pass");
+    else record("live-binary E2E (opt-in)", "fail", `exit ${r15.status}\n${r15.stderr.slice(0, 500)}`);
   }
 
   // Summary.
