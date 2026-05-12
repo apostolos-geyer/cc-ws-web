@@ -1,5 +1,15 @@
 # @somewhatintelligent/cc-ws-web-react
 
+## 0.1.2
+
+### Patch Changes
+
+- Updated dependencies [3eb13bc]
+- Updated dependencies [3eb13bc]
+  - @somewhatintelligent/cc-ws-client@0.2.0
+  - @somewhatintelligent/cc-ws-server@0.2.0
+  - @somewhatintelligent/cc-ws-react@0.1.5
+
 ## 0.1.1
 
 ### Patch Changes

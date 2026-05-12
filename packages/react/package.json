@@ -1,6 +1,6 @@
 {
   "name": "@somewhatintelligent/cc-ws-react",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "React hooks for the cc-ws reactive client; wraps nanostores atoms in useStore.",
   "license": "MIT",
   "type": "module",

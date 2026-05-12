@@ -1,6 +1,6 @@
 {
   "name": "@somewhatintelligent/cc-ws-element",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Drop-in <cc-ws-chat> custom element — embeddable Claude Code chat UI backed by a cc-ws WebSocket bridge.",
   "license": "MIT",
   "type": "module",
