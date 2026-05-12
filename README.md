@@ -7,10 +7,10 @@ The hard problem the workspace solves: keeping a typed, validated wire-format de
 ```sh
 bun install
 
-# Pick a reference app:
-bun --filter './apps/web' dev            # Svelte + Vite + standalone bridge on :3000
-bun --filter './apps/web-react' dev      # React 19 + Bun.serve, single-process
-bun --filter './apps/web-container' dev  # Svelte + Vite + bridge inside a Cloudflare Sandbox container (needs Docker)
+# Pick a reference app — three integration shapes for the same chat UI:
+bun --filter './apps/web' dev            # drop-in <cc-ws-chat> custom element, bridge as a sibling Bun process
+bun --filter './apps/web-react' dev      # build-your-own React UI on the cc-ws-react hooks, bridge embedded in the same Bun.serve
+bun --filter './apps/web-container' dev  # bridge isolated per-session inside a Cloudflare Sandbox container (needs Docker)
 ```
 
 ## High-level architecture
