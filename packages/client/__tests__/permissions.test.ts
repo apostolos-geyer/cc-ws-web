@@ -1,6 +1,10 @@
-import { describe, test, expect, beforeEach, spyOn } from "bun:test";
-import { createTestSession, createFakeWsClient, flush } from "./helpers";
-import { createPermissionsController } from "../src/permissions";
+// The permissions aggregator lives in `@cc-protocol/client/permissions`
+// and is exercised by `packages/protocol/__tests__/state-aggregation.test.ts`.
+// These tests cover the cc-ws-client session-level wrapping: end-to-end
+// onCanUseTool delivery + the UI queue path via `respondToPermission`.
+
+import { describe, test, expect } from "bun:test";
+import { createTestSession, flush } from "./helpers";
 
 function canUseToolFrame(id: string, toolName: string, input: any) {
   return {
@@ -10,199 +14,78 @@ function canUseToolFrame(id: string, toolName: string, input: any) {
   };
 }
 
-describe("permissions: callback path", () => {
-  test("allow decision replies with success+allow+updatedInput", async () => {
-    const ws = createFakeWsClient();
-    ws.connect();
+describe("session: onCanUseTool callback", () => {
+  test("delivers PendingPermission to callback and replies with verdict", async () => {
     const decisions: any[] = [];
-    const ctrl = createPermissionsController({
-      ws,
+    const h = createTestSession({
       onCanUseTool: async (req) => {
         decisions.push(req);
         return { behavior: "allow", updatedInput: { merged: true } };
       },
     });
-    ctrl.ingest(canUseToolFrame("rq1", "Bash", { cmd: "ls" }) as any);
+    h.session.connect();
+    await flush();
+    h.ws.pushFrame(canUseToolFrame("rq1", "Bash", { cmd: "ls" }) as any);
     await flush();
     await flush();
 
     expect(decisions).toHaveLength(1);
     expect(decisions[0]).toMatchObject({ id: "rq1", toolName: "Bash", input: { cmd: "ls" } });
-    expect(ws.sentFrames).toHaveLength(1);
-    expect(ws.sentFrames[0]).toMatchObject({
-      type: "control_response",
-      response: {
-        subtype: "success",
-        request_id: "rq1",
-        response: { behavior: "allow", updatedInput: { merged: true } },
-      },
+
+    const reply = h.ws.sentFrames.find((f) => (f as any).type === "control_response") as any;
+    expect(reply).toBeDefined();
+    expect(reply.response).toMatchObject({
+      subtype: "success",
+      request_id: "rq1",
+      response: { behavior: "allow", updatedInput: { merged: true } },
     });
-    expect(ctrl.pendingPermissions.get()).toEqual([]);
+    // UI queue stays empty because the callback short-circuited it.
+    expect(h.session.atoms.pendingPermissions.get()).toEqual([]);
   });
 
-  test("allow without updatedInput falls back to original input", async () => {
-    const ws = createFakeWsClient();
-    ws.connect();
-    const ctrl = createPermissionsController({
-      ws,
-      onCanUseTool: () => ({ behavior: "allow" }),
-    });
-    ctrl.ingest(canUseToolFrame("rq2", "Bash", { cmd: "ls" }) as any);
-    await flush();
-
-    expect((ws.sentFrames[0] as any).response.response).toEqual({
-      behavior: "allow",
-      updatedInput: { cmd: "ls" },
-    });
-  });
-
-  test("deny decision replies with success+deny+message", async () => {
-    const ws = createFakeWsClient();
-    ws.connect();
-    const ctrl = createPermissionsController({
-      ws,
-      onCanUseTool: async () => ({ behavior: "deny", message: "no thanks" }),
-    });
-    ctrl.ingest(canUseToolFrame("rq1", "Bash", { cmd: "rm -rf" }) as any);
-    await flush();
-
-    expect(ws.sentFrames[0]).toMatchObject({
-      type: "control_response",
-      response: {
-        subtype: "success",
-        request_id: "rq1",
-        response: { behavior: "deny", message: "no thanks" },
-      },
-    });
-  });
-
-  test("deny without message falls back to default", async () => {
-    const ws = createFakeWsClient();
-    ws.connect();
-    const ctrl = createPermissionsController({
-      ws,
-      onCanUseTool: async () => ({ behavior: "deny" }),
-    });
-    ctrl.ingest(canUseToolFrame("rq1", "Bash", {}) as any);
-    await flush();
-
-    expect((ws.sentFrames[0] as any).response.response).toEqual({
-      behavior: "deny",
-      message: "Denied by user",
-    });
-  });
-
-  test("callback throws → falls back to deny with 'handler error'", async () => {
-    const errSpy = spyOn(console, "error").mockImplementation(() => {});
-    const ws = createFakeWsClient();
-    ws.connect();
-    const ctrl = createPermissionsController({
-      ws,
-      onCanUseTool: async () => {
-        throw new Error("boom");
-      },
-    });
-    ctrl.ingest(canUseToolFrame("rq1", "Bash", {}) as any);
-    await flush();
-    await flush();
-
-    expect(ws.sentFrames[0]).toMatchObject({
-      type: "control_response",
-      response: {
-        subtype: "success",
-        request_id: "rq1",
-        response: { behavior: "deny", message: "handler error" },
-      },
-    });
-    errSpy.mockRestore();
-  });
-});
-
-describe("permissions: queue path (no callback)", () => {
-  test("populates pendingPermissions atom; respond() drains and replies", async () => {
-    const ws = createFakeWsClient();
-    ws.connect();
-    const ctrl = createPermissionsController({ ws });
-
-    ctrl.ingest(canUseToolFrame("rq1", "Bash", { cmd: "ls" }) as any);
-    expect(ctrl.pendingPermissions.get()).toHaveLength(1);
-    expect(ctrl.pendingPermissions.get()[0]).toMatchObject({
-      id: "rq1",
-      toolName: "Bash",
-      input: { cmd: "ls" },
-    });
-    expect(ws.sentFrames).toHaveLength(0);
-
-    ctrl.respond("rq1", { behavior: "allow" });
-    expect(ctrl.pendingPermissions.get()).toEqual([]);
-    expect(ws.sentFrames).toHaveLength(1);
-    expect((ws.sentFrames[0] as any).response.response).toMatchObject({
-      behavior: "allow",
-      updatedInput: { cmd: "ls" },
-    });
-  });
-
-  test("respond() with unknown id is a no-op", () => {
-    const ws = createFakeWsClient();
-    ws.connect();
-    const ctrl = createPermissionsController({ ws });
-    ctrl.respond("nope", { behavior: "allow" });
-    expect(ws.sentFrames).toHaveLength(0);
-  });
-
-  test("clearQueue() empties without replying (regression: stale queue on respawn)", () => {
-    const ws = createFakeWsClient();
-    ws.connect();
-    const ctrl = createPermissionsController({ ws });
-
-    ctrl.ingest(canUseToolFrame("rq1", "Bash", {}) as any);
-    ctrl.ingest(canUseToolFrame("rq2", "Edit", {}) as any);
-    expect(ctrl.pendingPermissions.get()).toHaveLength(2);
-
-    ctrl.clearQueue();
-    expect(ctrl.pendingPermissions.get()).toEqual([]);
-    expect(ws.sentFrames).toHaveLength(0);
-  });
-});
-
-describe("permissions: ingest filtering", () => {
-  test("non-can_use_tool control_requests are not handled", () => {
-    const ws = createFakeWsClient();
-    ws.connect();
-    const ctrl = createPermissionsController({ ws });
-    const handled = ctrl.ingest({
-      type: "control_request",
-      request_id: "x",
-      request: { subtype: "other" },
-    } as any);
-    expect(handled).toBe(false);
-    expect(ctrl.pendingPermissions.get()).toEqual([]);
-  });
-
-  test("non-control_request frames are not handled", () => {
-    const ws = createFakeWsClient();
-    ws.connect();
-    const ctrl = createPermissionsController({ ws });
-    const handled = ctrl.ingest({ type: "user", message: { role: "user", content: "hi" } } as any);
-    expect(handled).toBe(false);
-  });
-});
-
-describe("permissions: end-to-end via session", () => {
-  test("session with onCanUseTool callback delivers and replies", async () => {
-    const decisions: any[] = [];
+  test("deny verdict propagates with message", async () => {
     const h = createTestSession({
-      onCanUseTool: async (req) => {
-        decisions.push(req);
-        return { behavior: "allow" };
-      },
+      onCanUseTool: () => ({ behavior: "deny", message: "no thanks" }),
     });
     h.session.connect();
+    h.ws.pushFrame(canUseToolFrame("rq1", "Bash", { cmd: "rm -rf" }) as any);
+    await flush();
+    await flush();
+
+    const reply = h.ws.sentFrames.find((f) => (f as any).type === "control_response") as any;
+    expect(reply.response.response).toEqual({ behavior: "deny", message: "no thanks" });
+  });
+});
+
+describe("session: UI queue path (no onCanUseTool)", () => {
+  test("populates atoms.pendingPermissions; respondToPermission drains and replies", async () => {
+    const h = createTestSession();
+    h.session.connect();
+    await flush();
     h.ws.pushFrame(canUseToolFrame("rq1", "Bash", { cmd: "ls" }) as any);
     await flush();
 
-    const reply = h.ws.sentFrames.find((f) => (f as any).type === "control_response");
-    expect(reply).toBeDefined();
-    expect((reply as any).response.request_id).toBe("rq1");
+    const queue = h.session.atoms.pendingPermissions.get();
+    expect(queue).toHaveLength(1);
+    expect(queue[0]).toMatchObject({ id: "rq1", toolName: "Bash", input: { cmd: "ls" } });
+
+    h.session.respondToPermission("rq1", { behavior: "allow" });
+    await flush();
+
+    expect(h.session.atoms.pendingPermissions.get()).toEqual([]);
+    const reply = h.ws.sentFrames.find((f) => (f as any).type === "control_response") as any;
+    expect(reply.response.response).toMatchObject({
+      behavior: "allow",
+      updatedInput: { cmd: "ls" },
+    });
+  });
+
+  test("respondToPermission with unknown id is a no-op", async () => {
+    const h = createTestSession();
+    h.session.connect();
+    h.session.respondToPermission("nope", { behavior: "allow" });
+    await flush();
+    const responses = h.ws.sentFrames.filter((f) => (f as any).type === "control_response");
+    expect(responses).toHaveLength(0);
   });
 });

@@ -1,74 +1,73 @@
-// Test harness: in-memory fake WsClient + helpers for spinning up CcSession
+// Test harness: in-memory fake Transport + helpers for spinning up CcSession
 // instances without a real WebSocket / DOM / fetch. Tests inject the fake
-// via the `wsClient` option (added in session.ts).
+// via the `testTransport` option on createCcSession.
 
 import { atom, type WritableAtom } from "nanostores";
-import { createCcSession, type CcSession, type CcSessionOptions, type StorageLike } from "../src/session";
-import type { InboundFrame, OutboundFrame } from "../src/protocol";
-import type { WsClient, WsStatus } from "../src/ws";
+import {
+  createCcSession,
+  type CcSession,
+  type CcSessionOptions,
+  type StorageLike,
+  type WsStatus,
+} from "../src/index";
 
-export type FakeWsClient = WsClient & {
+export interface FakeTransport {
+  send(frame: unknown): Promise<void>;
+  onFrame(handler: (frame: unknown) => void): () => void;
+  close(): Promise<void>;
+  readonly closed: boolean;
   // Public read-only window into everything send() has been called with,
   // in order. Tests assert against this.
-  sentFrames: OutboundFrame[];
+  sentFrames: unknown[];
   // Push a fake inbound frame; fans out to every registered onFrame handler.
-  pushFrame: (frame: InboundFrame) => void;
+  pushFrame(frame: unknown): void;
   // Number of currently subscribed handlers (sanity for unsub tests).
-  handlerCount: () => number;
-};
+  handlerCount(): number;
+  // Status atom (mirrors the test seam plumbing).
+  status: WritableAtom<WsStatus>;
+  lastError: WritableAtom<string | null>;
+}
 
-export function createFakeWsClient(): FakeWsClient {
+export function createFakeTransport(): FakeTransport {
   const status: WritableAtom<WsStatus> = atom<WsStatus>("idle");
   const lastError: WritableAtom<string | null> = atom<string | null>(null);
-  const handlers = new Set<(f: InboundFrame) => void>();
-  const sentFrames: OutboundFrame[] = [];
+  const handlers = new Set<(f: unknown) => void>();
+  const sentFrames: unknown[] = [];
+  let closed = false;
 
-  function connect() {
-    // Defer to a microtask so callers that subscribe to status AFTER
-    // calling connect() see the "open" transition (matches the real WS,
-    // whose onopen fires async).
-    status.set("connecting");
-    queueMicrotask(() => {
-      status.set("open");
-    });
-  }
-
-  function disconnect() {
-    status.set("closed");
-  }
-
-  function send(frame: OutboundFrame) {
-    sentFrames.push(frame);
-  }
-
-  function onFrame(handler: (f: InboundFrame) => void): () => void {
-    handlers.add(handler);
-    return () => {
-      handlers.delete(handler);
-    };
-  }
-
-  function pushFrame(frame: InboundFrame) {
-    for (const h of handlers) h(frame);
-  }
-
-  return {
+  const t: FakeTransport = {
+    sentFrames,
     status,
     lastError,
-    connect,
-    disconnect,
-    send,
-    onFrame,
-    sentFrames,
-    pushFrame,
-    handlerCount: () => handlers.size,
+    async send(frame: unknown) {
+      sentFrames.push(frame);
+    },
+    onFrame(handler) {
+      handlers.add(handler);
+      return () => {
+        handlers.delete(handler);
+      };
+    },
+    async close() {
+      closed = true;
+    },
+    get closed() {
+      return closed;
+    },
+    pushFrame(frame: unknown) {
+      for (const h of [...handlers]) {
+        try { h(frame); } catch (err) { console.error("[fake] handler", err); }
+      }
+    },
+    handlerCount() {
+      return handlers.size;
+    },
   };
+  return t;
 }
 
 export type MemoryStorage = StorageLike & {
-  // Underlying map; tests can poke at it directly to seed or assert.
   store: Map<string, string>;
-  // Spy counters.
   setItemCalls: Array<{ key: string; value: string }>;
   removeItemCalls: string[];
 };
@@ -104,18 +103,18 @@ export async function flush() {
 
 export type TestSession = {
   session: CcSession;
-  ws: FakeWsClient;
+  ws: FakeTransport;
   storage: MemoryStorage | null;
 };
 
-export type TestSessionOverrides = Partial<Omit<CcSessionOptions, "wsClient">> & {
-  wsClient?: FakeWsClient;
+export type TestSessionOverrides = Partial<Omit<CcSessionOptions, "testTransport">> & {
+  testTransport?: FakeTransport;
   // null disables persistence (no storage at all).
   storage?: MemoryStorage | null;
 };
 
 export function createTestSession(overrides: TestSessionOverrides = {}): TestSession {
-  const ws = overrides.wsClient ?? createFakeWsClient();
+  const ws = overrides.testTransport ?? createFakeTransport();
   // Resolve storage: explicit null = pass `persistence: false`; explicit
   // override = use it; default = create a fresh memory storage.
   let storage: MemoryStorage | null;
@@ -143,7 +142,11 @@ export function createTestSession(overrides: TestSessionOverrides = {}): TestSes
     onCanUseTool: overrides.onCanUseTool,
     onTrace: overrides.onTrace,
     persistence,
-    wsClient: ws,
+    testTransport: {
+      transport: ws,
+      status: ws.status,
+      lastError: ws.lastError,
+    },
   });
 
   return { session, ws, storage };

@@ -68,10 +68,77 @@ export type {
   ShellSource,
   BashFrame,
 } from "./shell";
+export {
+  parseBashFrame,
+  buildBashXml,
+  escapeXml,
+  decodeXml,
+} from "./shell";
 export type {
   HookEntry,
   HookSubtype,
 } from "./hooks";
+
+// Re-export wire-frame types + predicates so consumers can `import { ... }
+// from "@cc-protocol/client"` rather than the `/frames` subpath.
+export type {
+  AssistantContentBlock,
+  AssistantFrame,
+  AssistantMessage,
+  BashCommandFrame,
+  CanUseToolControlRequest,
+  CanUseToolRequest,
+  CanUseToolResponseFrame,
+  ControlRequestFrame,
+  ControlRequestPayload,
+  ControlResponseError,
+  ControlResponseFrame,
+  ControlResponseSuccess,
+  ImageContentBlock,
+  InboundFrame,
+  Json,
+  OutboundControlRequestFrame,
+  OutboundControlRequestSubtype,
+  OutboundFrame,
+  RateLimitEventFrame,
+  ResultFrame,
+  SessionStateValue,
+  StreamEvent,
+  StreamEventFrame,
+  SystemCompactBoundary,
+  SystemFrame,
+  SystemHook,
+  SystemInit,
+  SystemLocalCommandOutput,
+  SystemSessionStateChanged,
+  SystemStatus,
+  SystemTaskNotification,
+  SystemTaskProgress,
+  SystemTaskStarted,
+  SystemTaskUpdated,
+  TaskUpdatedPatch,
+  TaskUsageBlock,
+  TextContentBlock,
+  ThinkingContentBlock,
+  ToolResultContentBlock,
+  ToolUseContentBlock,
+  UnknownControlRequest,
+  UnknownSystemFrame,
+  UsageBlock,
+  UserContentBlock,
+  UserFrame,
+  UserMessage,
+  UserMessageFrame,
+} from "./frames";
+export {
+  isAssistantFrame,
+  isControlRequest,
+  isControlResponse,
+  isResultFrame,
+  isStreamEventFrame,
+  isSystemFrame,
+  isUserFrame,
+} from "./frames";
 
 export interface ClaudeClientOptions {
   /** Low-level callback (raw frame payload). */

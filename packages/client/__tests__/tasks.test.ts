@@ -185,6 +185,6 @@ describe("stopTask", () => {
       type: "control_response",
       response: { subtype: "error", request_id: sent.request_id, error: "task not found" },
     } as any);
-    await expect(p).rejects.toBe("task not found");
+    await expect(p).rejects.toThrow(/task not found/);
   });
 });
