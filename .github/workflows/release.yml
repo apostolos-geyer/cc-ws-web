@@ -35,6 +35,13 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # Codegen artifact gates — these don't require the claude binary;
+      # they validate that the committed snapshots / generated types /
+      # fixtures remain consistent with each other. Any patch edit that
+      # breaks a previously-passing case fails CI deterministically here.
+      - name: Codegen gates (check-gaps + verify-package + replay + tsc)
+        run: bun codegen/ci-checks.ts
+
       - name: Test
         run: bun test
 
