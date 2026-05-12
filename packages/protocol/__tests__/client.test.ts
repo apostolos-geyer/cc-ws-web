@@ -237,13 +237,14 @@ describe("ClaudeClient permission requests", () => {
     h.feed({
       type: "control_request",
       request_id: "perm-2",
-      request: { subtype: "can_use_tool", tool: "Read" },
+      request: { subtype: "can_use_tool", tool_name: "Read", input: {} },
     });
-    expect(client.getSnapshot().pendingPermissionRequests["perm-2"]).toBeDefined();
+    // onPermissionRequest is a raw low-level callback — it short-circuits
+    // queue tracking, so the UI-shape queue stays empty. State still flips
+    // to requires_action via the StateHolder.applyInbound path.
     expect(client.getSnapshot().sessionState).toBe("requires_action");
     resolveCb({ behavior: "allow" });
     await tick();
     await tick();
-    expect(client.getSnapshot().pendingPermissionRequests["perm-2"]).toBeUndefined();
   });
 });

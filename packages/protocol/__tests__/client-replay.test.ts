@@ -59,11 +59,14 @@ describe("ClaudeClient state on committed fixtures", () => {
       const snap = client.getSnapshot();
       // No system/init in zero-cost fixtures → no sessionId set.
       expect(snap.sessionId).toBeNull();
-      // No assistant frames in zero-cost fixtures → empty history.
-      expect(snap.messages).toEqual([]);
+      // No assistant frames in zero-cost fixtures → no assistant entries.
+      const assistantEntries = snap.messages.filter(
+        (m) => m.kind === "frame" && (m.frame as { type?: string }).type === "assistant",
+      );
+      expect(assistantEntries).toEqual([]);
       // No can_use_tool frames in zero-cost fixtures → empty pending.
-      expect(Object.keys(snap.pendingPermissionRequests)).toEqual([]);
-      expect(Object.keys(snap.tasks)).toEqual([]);
+      expect(snap.pendingPermissions).toEqual([]);
+      expect(snap.tasks).toEqual([]);
     });
   }
 });

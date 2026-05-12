@@ -7,11 +7,9 @@
  *
  * Wire envelope for every control_request:
  *   { type: "control_request", request_id, request: { subtype, ...payload } }
- *
- * Non-control frames (user messages, bash commands, end-session) are
- * built here too — they all live "outbound from the consumer" and share a
- * dispatch shape.
  */
+
+import type { UserContentBlock } from "./frames";
 
 export function buildControlRequest(
   requestId: string,
@@ -25,8 +23,9 @@ export function buildControlRequest(
   };
 }
 
-export function buildUserMessage(text: string): unknown {
-  // Matches the integration-test runner's user_message step shape.
+export function buildUserMessage(
+  text: string | UserContentBlock[],
+): unknown {
   return {
     type: "user",
     message: { role: "user", content: text },
@@ -34,8 +33,6 @@ export function buildUserMessage(text: string): unknown {
 }
 
 export function buildBashCommandMessage(command: string): unknown {
-  // From generated schemas: BashCommandMessage = { type: "bash_command", ...
-  // }. The leaked controlSchemas show the field is `command`.
   return {
     type: "bash_command",
     command,

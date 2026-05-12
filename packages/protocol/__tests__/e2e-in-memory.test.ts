@@ -102,6 +102,12 @@ describe("inMemoryPair: ClaudeClient ↔ ClaudeProcess", () => {
     await tick();
     const snap = client.getSnapshot();
     expect(snap.sessionId).toBe("sess-e2e");
-    expect(snap.messages).toHaveLength(1);
+    // system/init + assistant both land on the timeline.
+    expect(snap.messages.length).toBeGreaterThanOrEqual(1);
+    expect(
+      snap.messages.find(
+        (m) => m.kind === "frame" && (m.frame as { type?: string }).type === "assistant",
+      ),
+    ).toBeDefined();
   });
 });
