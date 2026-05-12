@@ -6,7 +6,11 @@ The hard problem the workspace solves: keeping a typed, validated wire-format de
 
 ```sh
 bun install
-bun --filter './apps/web' dev   # Svelte reference at http://localhost:5173, bridge on :3000
+
+# Pick a reference app:
+bun --filter './apps/web' dev            # Svelte + Vite + standalone bridge on :3000
+bun --filter './apps/web-react' dev      # React 19 + Bun.serve, single-process
+bun --filter './apps/web-container' dev  # Svelte + Vite + bridge inside a Cloudflare Sandbox container (needs Docker)
 ```
 
 ## High-level architecture
