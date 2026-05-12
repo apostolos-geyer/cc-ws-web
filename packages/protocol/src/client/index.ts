@@ -352,6 +352,17 @@ export class ClaudeClient {
     this.stateHolder.seedModel(model);
   }
 
+  /**
+   * Seed sessionId before first init (persistence-restore path). Required
+   * because the binary defers system/init until the first user message in
+   * stream-json mode; without this the persisted resume id never lands in
+   * `state.sessionId` and gets wiped by the first debounced persistence
+   * save.
+   */
+  seedSessionId(id: string | null): void {
+    this.stateHolder.seedSessionId(id);
+  }
+
   /** Reject all in-flight intent promises (used on respawn / disconnect). */
   abortAllIntents(reason: string): void {
     this.correlator.rejectAll(new Error(reason));

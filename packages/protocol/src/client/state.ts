@@ -479,4 +479,21 @@ export class StateHolder {
       s.activeModel = model;
     });
   }
+  /**
+   * Seed sessionId before the first system/init lands. The binary only
+   * emits system/init AFTER the first user message in stream-json mode, so
+   * a resumed session has no way to populate `state.sessionId` until the
+   * user sends something. Without seeding, the persistence writer's
+   * debounced first-save flushes `{sessionId: null, ...}` 250ms after
+   * mount — wiping the resume id out of localStorage. Also the UI's
+   * `$init.sessionId` reads null and the session indicator stays empty.
+   * Seeding from the persisted snapshot fixes both.
+   */
+  seedSessionId(id: string | null): void {
+    if (!id) return;
+    this.update((s) => {
+      s.sessionId = id;
+      s.init = { ...s.init, sessionId: id };
+    });
+  }
 }

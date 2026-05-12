@@ -268,6 +268,14 @@ export function createCcSession(opts: CcSessionOptions): CcSession {
   if (persisted?.model) {
     client.seedModel(persisted.model);
   }
+  // Critical: the binary defers system/init until the first user message
+  // in stream-json mode. Without seeding sessionId here, the persistence
+  // writer's first debounced save (250ms after mount) flushes the in-memory
+  // null over the persisted id — wiping it from localStorage and leaving
+  // the Header indicator empty until the user actually sends something.
+  if (persisted?.sessionId) {
+    client.seedSessionId(persisted.sessionId);
+  }
 
   // ---- mirror ClientState into atoms ----
   const snap0 = client.getSnapshot();
