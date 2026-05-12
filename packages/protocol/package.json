@@ -1,6 +1,6 @@
 {
   "name": "@somewhatintelligent/cc-protocol",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "Universal, browser-safe schemas + types + (eventually) ClaudeClient/ClaudeProcess principals + Transport adapters for the Claude Code stream-json wire protocol.",
   "license": "MIT",
   "type": "module",
