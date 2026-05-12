@@ -9,7 +9,7 @@
  * Mutations are synchronous inside the inbound-frame handler;
  * subscribers fire after each mutation with the post-mutation snapshot.
  *
- * Universal — no reactivity dep, no DOM, no Node/Bun.
+ * Universal — no reactivity dep, no DOM, no runtime-specific imports.
  */
 
 import type { Transport } from "../transport/index";

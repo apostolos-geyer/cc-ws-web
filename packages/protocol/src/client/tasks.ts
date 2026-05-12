@@ -5,7 +5,7 @@
  * (any frame carrying `parent_tool_use_id`) into the matching task's
  * transcript instead of the main timeline.
  *
- * Pure JS, no reactivity, no Node/Bun. The orphan-frame TTL is computed
+ * Pure JS, no reactivity, runtime-agnostic. The orphan-frame TTL is computed
  * against a caller-supplied clock so tests can be deterministic.
  */
 

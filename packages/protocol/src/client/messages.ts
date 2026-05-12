@@ -6,7 +6,7 @@
  * is authoritative — the streaming entry is replaced by the canonical
  * frame entry.
  *
- * No reactivity dep, no DOM, no Node/Bun. Universal.
+ * No reactivity dep, no DOM, no runtime-specific imports. Universal.
  */
 
 import type {

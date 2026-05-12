@@ -12,7 +12,7 @@
  *                   `sendUserMessage`, parity with TUI `!cmd`
  *   - "sideChannel" — fire-and-forget; output goes to ShellEntry only
  *
- * Pure JS over wire frames. No reactivity, no Node/Bun. Callers wire
+ * Pure JS over wire frames. No reactivity, runtime-agnostic. Callers wire
  * the outbound `bash_command` send + the `sendUserMessage` follow-up
  * action via the constructor.
  */
