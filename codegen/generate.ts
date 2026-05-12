@@ -153,7 +153,7 @@ async function main() {
   writeFileSync(join(OUT_DIR, "types.ts"), renderTypesTs(schemas, canonicalSha));
   writeFileSync(
     join(OUT_DIR, "dispatch.ts"),
-    renderDispatchTs(schemas, annotated, canonicalSha),
+    renderDispatchTs(annotated, canonicalSha),
   );
 
   const coverage = computeCoverage(schemas, annotated.appliedPatchCount);
@@ -526,21 +526,19 @@ function translateInner(
     const parsedFields = parseInlineObjectFields(inner);
     if (!parsedFields) return null;
     const parts: string[] = [];
-    let kind: ArktypeExpression["kind"] = "string";
     for (const { name, rhs: fRhs } of parsedFields) {
       const t = translateRhs(fRhs, annotated);
       if (!t) return null;
       const key = t.optional ? `"${name}?"` : `"${name}"`;
-      if (t.arktype.kind === "expr") {
-        kind = "expr";
-        parts.push(`${key}: ${t.arktype.value}`);
-      } else {
-        parts.push(`${key}: "${t.arktype.value}"`);
-      }
+      parts.push(
+        t.arktype.kind === "expr"
+          ? `${key}: ${t.arktype.value}`
+          : `${key}: "${t.arktype.value}"`,
+      );
     }
-    // If every value is a string-kind, we *could* return an inline arktype
-    // DSL string, but the easier-to-parse JS-object form works regardless
-    // and avoids escaping headaches.
+    // We always return the JS-object form regardless of whether every field
+    // is a primitive string kind — avoids escape headaches and parses the
+    // same in arktype.
     return { kind: "expr", value: `{ ${parts.join(", ")} }` };
   }
 
@@ -936,7 +934,6 @@ function renderTypesTs(schemas: PerSchemaResult[], canonicalSha: string): string
 }
 
 function renderDispatchTs(
-  schemas: PerSchemaResult[],
   annotated: AnnotatedCanonical,
   canonicalSha: string,
 ): string {
